@@ -10,7 +10,7 @@ To make a Crypto Fear and Greed index with AI is, at the least, an adventure. It
 better prompy. It took a few hours to explain that fear and greed where positioned correctly but the colors where just
 wrong and on the wrong side.
 
-If you use the program and make adjustements, please let me know. Woukd like to learn. 
+If you use the program and make adjustments, please let me know. Woukd like to learn. 
 
 Main program: tracker.py needs tracker.xlsx
 sub programs:
@@ -44,6 +44,10 @@ and the Profit/loss
 
 **Live View Fear and Greed**
 Shows the current Crypto Fear and Greed index graphically. Show also the index from yesterday, last week and last month
+
+
+![fearandgreed](https://github.com/user-attachments/assets/af312a20-f8fa-4246-aecf-aeb87a45e75d)
+
 
 **Live View AGGR**
 Opens een AGGR window en shows the progress of the value of Bitcoin. 
