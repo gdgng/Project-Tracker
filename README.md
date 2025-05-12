@@ -1,6 +1,9 @@
 # Project-Tracker
 Crypto Tracker version 1.0: tracks coins, shows warm and cold storage, stocks and reads csv from exchange.
 
+
+![Main](https://github.com/user-attachments/assets/66392301-6016-40cc-86ad-9a1303684241)
+
 Still work in progress. Fully functional version. Written in Python. Run from the commandline or use 
 auto-py-to-exe to make an excutable (Windowss). Still a lot of work to be done. Feel free to use and experiment. 
 I had to learn Python for it but with help of Gemin, Co-pilot and Chatgtp it was an start for an inetresting experience. 
