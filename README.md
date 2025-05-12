@@ -12,7 +12,7 @@ wrong and on the wrong side.
 
 If you use the program and make adjustements, please let me know. Woukd like to learn. 
 
-Main prohram: tracker.py needs tracker.xlsx
+Main program: tracker.py needs tracker.xlsx
 sub programs:
   - aggr_window.py (Live View)
   - mem_window.py (Live View)
