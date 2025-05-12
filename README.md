@@ -43,7 +43,7 @@ it will show the amount of money inut in the exchange,the amount money taken out
 and the Profit/loss
 
 **Live View Fear and Greed**
-Shows the current Crypto Fear and Greed index graphically. Show also the index from yesterday, last week and last month
+Shows the current Crypto Fear and Greed index graphically, with a bit of animation. Show also the index from yesterday, last week and last month
 
 
 ![fearandgreed](https://github.com/user-attachments/assets/af312a20-f8fa-4246-aecf-aeb87a45e75d)
