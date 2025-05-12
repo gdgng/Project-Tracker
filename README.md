@@ -50,8 +50,11 @@ Shows the current Crypto Fear and Greed index graphically. Show also the index f
 
 
 **Live View AGGR**
-Opens een AGGR window en shows the progress of the value of Bitcoin. 
+Opens een AGGR window and shows the progress of the value of Bitcoin. 
+
+![AggrViewer](https://github.com/user-attachments/assets/11c0098f-115e-402f-9b89-79704f26091b)
 
 
-![Uploading AggrViewer.jpg…]()
+
+**Live View Mempool**
 
