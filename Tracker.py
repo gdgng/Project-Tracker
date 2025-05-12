@@ -4,6 +4,7 @@
 # 12-04-2025 V0.9
 # 14-04-2025 V0.95
 # 17-04-2025 V1.0
+# 12-05-2025 V1.01 Changes in update warm,cold & total assets (no update_gui when shown), visual changes to Fear and Greed
 #--------------------------------------------------------------------------------------------------
 # Bitcoin_tracker EUR/USD Value. Gets the EUR value from an exchange, site scraping for the current
 # dollar value.
@@ -48,7 +49,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#
 #from calcpiv import load_csv_calculate
-
+import logging
+#logging.basicConfig(level=logging.DEBUG)
 
 class SimpleMarkdownText(tkscroll.ScrolledText):
     """
@@ -186,26 +188,42 @@ main_widgets = {} # Initialise main_widgets as an empty dictionary
 aggr_window_instance = None
 total_stocks = 0
 
-def create_signature(ts, method, endp, body=None):
-    msg = str(ts) + method + '/v2/' + endp
+
+
+def create_signature(ts, method, endpoint, body=None):
+    url_path = '/v2/' + endpoint  # Ensure this is correct
+    msg = str(ts) + method + url_path
     if body:
         msg += json.dumps(body)
-    return hmac.new(WARM_API_SECRET.encode('utf-8'), msg.encode(), hashlib.sha256).hexdigest()
+    signature = hmac.new(WARM_API_SECRET.encode('utf-8'), msg.encode(), hashlib.sha256).hexdigest()
+    #logging.debug(f"SIGNATURE INPUT ({endpoint}): {msg}")
+    #logging.debug(f"GENERATED SIGNATURE ({endpoint}): {signature}")
+    return signature
 
-
-def warm_exchange_req(method, endpoint, params=None):
+def warm_exchange_req(method, endpoint, params=None, retries=3):
     ts = int(time.time() * 1000)
     headers = {f'{Warm_API_Name}-Access-Key': WARM_API_KEY,
                f'{Warm_API_Name}-Access-Timestamp': str(ts),
-               f'{Warm_API_Name}-Access-Signature': create_signature(ts, method, endpoint, params)}
+               f'{Warm_API_Name}-Access-Signature': create_signature(ts, method, endpoint, params),
+               f'{Warm_API_Name}-Access-Window': '10000'
+              }
     try:
-        resp = requests.request(method, WARM_API_URL + endpoint, headers=headers, params=params)
+        full_url = WARM_API_URL + endpoint
+        #logging.debug(f"Request URL: {full_url}")
+        #logging.debug(f"Request Method: {method}")
+        #logging.debug(f"Request Headers: {headers}")
+        #logging.debug(f"Request Params: {params}")
+        resp = requests.request(method, full_url, headers=headers, params=params)
+        #logging.debug(f"Response Headers: {resp.headers}")
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Warm Storage Access API error ({endpoint}): {e}")
+        if resp is not None and resp.status_code == 403 and retries > 0:
+            #logging.warning(f"Received 403, retrying in 5 seconds... (Retries left: {retries})")
+            time.sleep(5)
+            return warm_exchange_req(method, endpoint, params, retries - 1)
         return None
-
 
 def get_warm_exchange_ticker(market):
     return warm_exchange_req('GET', f"ticker/price?market={market}")
@@ -339,7 +357,7 @@ def update_gui(root, labels):
         root.after_cancel(after_id)
 
     # Schedule the next update after 10 seconds
-    after_id = root.after(10000, update_gui, root, labels)
+    after_id = root.after(15000, update_gui, root, labels) # update every 15 seconds
 
 
 
@@ -530,7 +548,7 @@ def show_warm_storage(root):
             no_assets_label = tk.Label(root, text="No Assets Found.", font=("Helvetica", 16), fg="white", bg="black")
             no_assets_label.pack()
 
-        back_button = tk.Button(root, text="Back to Tracker", command=back_to_main_warm,
+        back_button = tk.Button(root, text="Back", command=back_to_main_warm,
                                  bg="grey", fg="white", font=("Helvetica", 14))
         back_button.pack(pady=20)
 
@@ -849,56 +867,6 @@ def find_eur_and_get_amounts(file_path):
 
 
 
-def show_total_assets(root, main_widgets):
-    global balances, is_tracker_active
-    global warm_value, cold_value, total_assets_value_label
-    global updater_job  # <-- NEW: to keep track of after() job
-    global total_stock_value  # Needed for calculation inside update_assets
-    global status_label  # <-- NEW: for the updating status label
-    # Testing purposes
-    global T_EUR_I
-    global T_EUR_O
-    global T_INVST
-    global T_PL
-    file_path = 'tracker.xlsx'
-    amounts = find_eur_and_get_amounts(file_path)
-
-    if amounts:
-        deposit_value, withdrawal_value = amounts
-        print(f"For EUR, the 'Amount deposit' is: {deposit_value} and 'Amount withdrawal' is: {withdrawal_value}")
-        T_EUR_I = deposit_value
-        T_EUR_O = abs(withdrawal_value)
-        T_INVST = T_EUR_I - T_EUR_O
-        print(T_EUR_I)
-
-
-
-    # total_stock_value = 0
-    C_counter = 0
-    C_date = None
-    is_tracker_active = False
-    updater_job = None  # Initialize updater job
-    #Check if user has filled in new Stocks value otherwise get the latest
-    # Also Check if a CSV has been processed
-    if total_stocks == 0:
-        try:
-            wb=openpyxl.load_workbook('tracker.xlsx')
-            ws=wb['Stocks']
-            C_counter = ws['C1'].value
-            C_counter = C_counter - 1
-            C_date=ws['A'+str(C_counter)].value
-            total_stock_value = ws['B'+str(C_counter)].value
-            #ws=wb['Pivot Table Summary']
-        except FileNotFoundError:
-           print("assigned total_stock_value is wrong / file not found")
-    else:
-        total_stock_value = total_stocks
-
-    warm_value = None
-    cold_value = None
-    total_assets_value_label = None
-
-
 
 def show_total_assets(root, main_widgets):
     global balances, is_tracker_active
@@ -910,6 +878,10 @@ def show_total_assets(root, main_widgets):
     global T_EUR_O
     global T_INVST
     global T_PL
+    global is_tracker_active, updater_job_total, status_label_total
+    is_tracker_active = False
+    updater_job_total = None
+    status_label_total = None
 
     file_path = 'tracker.xlsx'
     amounts = find_eur_and_get_amounts(file_path)
@@ -1024,15 +996,15 @@ def show_total_assets(root, main_widgets):
             animate()
 
         # Schedule next update and store job ID
-        updater_job = root.after(10000, update_assets)
+        updater_job_total = root.after(10000, update_assets)
 
     def back_to_main():
-        global is_tracker_active, current_screen, updater_job, status_label, T_PL
+        global is_tracker_active, current_screen, updater_job_total, status_label, T_PL
 
         # Stop and cancel ongoing animation/updater job
-        if updater_job is not None:
-            root.after_cancel(updater_job)
-            updater_job = None
+        if updater_job_total is not None:
+            root.after_cancel(updater_job_total)
+            updater_job_total = None
 
         # Destroy all non-menu widgets
         for widget in root.winfo_children():
@@ -1165,7 +1137,7 @@ def show_total_assets(root, main_widgets):
     total_crypto_value_label.pack(side="right", padx=(0, 20))
 
     # Back Button
-    back_button = tk.Button(root, text="Back to Tracker", command=back_to_main, font=("Helvetica", 14), bg="grey", fg="white")
+    back_button = tk.Button(root, text="Back", command=back_to_main, font=("Helvetica", 14), bg="grey", fg="white")
     back_button.pack(pady=20)
 
     # Start updating assets (this will schedule the first update)
@@ -1213,6 +1185,7 @@ def draw_static_meter(ax):
                c=cmap(norm(np.linspace(0, 100, len(theta)))), s=75, zorder=2)  # Scatter points with colors based on Fear & Greed
 
     # Text labels for 0, 100, and Neutral
+    ax.set_xlim([-1.3, 1.3]) # Increased horizontal limits
     ax.text(-1.05, -0.05, '0 (extreme fear)', ha='center', va='center', color='darkred', fontweight='bold')
     ax.text(1.05, -0.05, '100 (extreme greed)', ha='center', va='center', color='forestgreen', fontweight='bold')
     ax.text(0, 1.15, 'Neutral', ha='center', va='center', color='gray')
