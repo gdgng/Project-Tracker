@@ -5,7 +5,7 @@ Crypto Tracker version 1.0: tracks coins, shows warm and cold storage, stocks an
 
 Still work in progress. Fully functional version. Written in Python. Run from the commandline or use 
 auto-py-to-exe to make an excutable (Windowss). Still a lot of work to be done. Feel free to use and experiment. 
-I had to learn Python for it but with help of Gemin, Co-pilot and Chatgtp it was a start for an inetresting experience. 
+I had to learn Python for it but with help of Gemin, Co-pilot and Chatgtp it was a start for an intresting experience. 
 To make a Crypto Fear and Greed index with AI is, at the least, an adventure. It gave an insight in how to formulate a 
 better prompy. It took a few hours to explain that fear and greed was positioned correctly but the colors where just
 wrong and on the wrong side.
