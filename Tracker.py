@@ -39,6 +39,7 @@ import openpyxl
 import subprocess
 import os
 import json
+import webview
 import markdown
 from openpyxl import Workbook
 from openpyxl.styles import Font, Fill, PatternFill
@@ -158,7 +159,6 @@ class SimpleMarkdownText(tkscroll.ScrolledText):
 
 
 
-
 print('Initializing......')
 stocks=0
 today = date.today()
@@ -269,10 +269,15 @@ def scrape_eur_usd():
 
 def update_gui(root, labels):
     global previous_prices, selected_coin, balances, is_tracker_active, after_id
+    global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol
 
-    print("update_gui called!")
+    print("update_gui called") ## DEBUG:
+    print(is_tracker_active) ##  DEBUG:
+
+
 
     # Stop if event is set, tracker is inactive, or root does not exist anymore
+    # Should be inactive or False by Warm Storage, Cold Storage and Total Assets
     if stop_event.is_set() or not is_tracker_active or not root.winfo_exists():
         print("update_gui: stopped due to event, inactive state, or missing root window")
         return
@@ -286,12 +291,28 @@ def update_gui(root, labels):
         after_id = root.after(10000, update_gui, root, labels)
         return
 
+    selected_coin_str = labels['coins_dropdown'].get() # Get the string value
+    print(f"Selected coin in update_gui: {selected_coin_str}")
+    ath_data = get_ath(selected_coin_str) # First call to get_ath
+
+    if isinstance(ath_data, tuple) and len(ath_data) == 2:
+        ath_price_usd = ath_data[0]
+        ath_price_eur = ath_data[1]
+        print(f"ATH EUR: {ath_price_eur}, ATH USD: {ath_price_usd}") # Debug
+    else:
+        print(f"Error: Unexpected format for ATH data: {ath_data}")
+        ath_price_eur = None
+        ath_price_usd = None
+
+
     # Fetch the price ticker, EUR/USD rate, and balances
     ticker_data = get_crypto_ticker(crypto)
     eur_usd_rate = scrape_eur_usd()
     balances = get_warm_exchange_balance()
+    # Removed the second call to get_ath here: ath_price_usd, ath_price_eur = get_ath(crypto)
 
-    # Handle EUR rate as 1 if the selected coin is EUR. Of course. only for the Europeans.
+
+    # Handle EUR rate as 1 if the selected coin is EUR. Of course... only for the Europeans.
     if crypto == 'EUR':
         eur_price = 1
         print('euro is 1')
@@ -328,7 +349,8 @@ def update_gui(root, labels):
         if 'eur_value' in labels and tk.Frame.winfo_exists(labels['eur_value'].master):
             eur_text = f"€{eur_price:.2f}" if eur_price is not None else "Failed"
             if eur_price is not None and eur_price < 100000:
-                eur_text = f"€  {eur_price:.2f}"  # Added extra space here
+                eur_text = f"€  {eur_price:.2f}"
+                # Added extra space here
             labels['eur_value'].config(
                 text=f"{eur_text} {eur_arrow}",
                 fg=eur_color, font=("Helvetica", 16))
@@ -337,12 +359,20 @@ def update_gui(root, labels):
         if 'usd_value' in labels and tk.Frame.winfo_exists(labels['usd_value'].master):
             usd_text = f"${usd_price:.2f}" if usd_price is not None else "Failed"
             if usd_price is not None and usd_price < 100000:
-                usd_text = f"$  {usd_price:.2f}"  # Added extra space here
+                usd_text = f"$ {usd_price:.2f}"
+                # Added extra space here
             labels['usd_value'].config(text=f"{usd_text} {usd_arrow}" if usd_price is not None else "Failed", fg=usd_color, font=("Helvetica", 16))
         if 'footer_text' in labels and tk.Frame.winfo_exists(labels['footer_text'].master):
             labels['footer_text'].config(text="Updated:", font=("Helvetica", 16))
         if 'footer_date' in labels and tk.Frame.winfo_exists(labels['footer_date'].master):
             labels['footer_date'].config(text=updated_time, fg="yellow", font=("Helvetica", 12))
+        # Use the ath_data fetched at the beginning of the function
+        if 'ath_label' in labels and tk.Widget.winfo_exists(labels['ath_label']) and 'ath_label_text' in labels:
+            ath_label_var = labels['ath_label_text']
+            usd_display = f"${ath_price_usd:.2f}" if ath_price_usd is not None else "N/A"
+            eur_display = f"€{ath_price_eur:.2f}" if ath_price_eur is not None else "N/A"
+            ath_label_var.set(f"Ath: {eur_display}, {usd_display}")
+            print(f"ATH Label StringVar set to: {ath_label_var.get()}")
     else:
         # If fetching data failed, update labels accordingly
         if 'eur_value' in labels and tk.Frame.winfo_exists(labels['eur_value'].master):
@@ -356,11 +386,8 @@ def update_gui(root, labels):
     if after_id:
         root.after_cancel(after_id)
 
-    # Schedule the next update after 10 seconds
-    after_id = root.after(15000, update_gui, root, labels) # update every 15 seconds
-
-
-
+    # Schedule the next update after 15 seconds
+    after_id = root.after(30000, update_gui, root, labels) # update every 30 seconds
 
 
 
@@ -441,7 +468,7 @@ def show_warm_storage(root):
     is_tracker_active = False
     updater_job_warm = None
     status_label_warm = None
-
+    print(is_tracker_active)
     def update_warm_storage():
         """Refresh warm storage display and animate status"""
         global updater_job_warm, status_label_warm
@@ -878,6 +905,7 @@ def show_total_assets(root, main_widgets):
     global T_EUR_O
     global T_INVST
     global T_PL
+    global pl_percentage
     global is_tracker_active, updater_job_total, status_label_total
     is_tracker_active = False
     updater_job_total = None
@@ -919,14 +947,16 @@ def show_total_assets(root, main_widgets):
     total_pl_var = tk.StringVar(root, value="0.00")
 
     # Initialize global warm_value and cold_value as StringVar as well for updating
-    global warm_value_var, cold_value_var, total_assets_value_var
+    global warm_value_var, cold_value_var, total_assets_value_var, total_perc_var, total_crypto_text_var
     warm_value_var = tk.StringVar(root, value="0.00")
     cold_value_var = tk.StringVar(root, value="0.00")
     total_assets_value_var = tk.StringVar(root, value="0.00")
+    total_perc_var = tk.StringVar(root, value="0.00")
+    total_crypto_text = tk.StringVar(root, value="0.0)")
 
     def update_assets():
         global warm_value, cold_value, total_assets_value_label, updater_job, T_PL
-        global warm_value_var, cold_value_var, total_assets_value_var  # Access the StringVars
+        global warm_value_var, cold_value_var, total_assets_value_var, pl_percentage, total_perc_var# Access the StringVars
 
         # Get the balances from warm and cold storage
         warm_balances = get_warm_exchange_balance()
@@ -961,18 +991,32 @@ def show_total_assets(root, main_widgets):
             )
             cold_value_var.set(f"€{total_cold_value:.2f}")  # Update StringVar
             T_PL = (total_cold_value + total_warm_value)- T_INVST  # Calculate T_PL here
+            pl_percentage = ((T_PL / T_INVST) * 100) - 100
+
             total_pl_var.set(f"€{T_PL:.2f}")  # Update T_PL StringVar
-            #print(T_PL)
-            #print(T_INVST)
-            #print('cold')
+
+            total_perc_var.set(f"{pl_percentage:.2f} %")
+            percentage_value = total_perc_var.get()
+            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
+
+
         elif warm_value:  # If only warm balance exists
             T_PL = total_warm_value=T_INVST
             total_pl_var.set(f"€{T_PL:.2f}")
-            #print(T_PL)
-            #print('warm')
+
+            total_perc_var.set(f"{pl_percentage:.2f} %")
+            percentage_value = total_perc_var.get()
+            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
+
+
+
         else:
             T_PL = 0.00
             total_pl_var.set(f"€{T_PL:.2f}")
+            #total_perc_var.set(f"{pl_percentage} %")
+            total_perc_var.set(f"{pl_percentage:.2f} %")
+            percentage_value = total_perc_var.get()
+            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
 
         # Total assets = warm storage + cold storage + stocks + EUR
         total_assets_value = total_warm_value + total_cold_value + total_stock_value
@@ -1023,8 +1067,15 @@ def show_total_assets(root, main_widgets):
 
     # Clear previous widgets
     for widget in main_widgets.values():
-        widget.pack_forget()
-        widget.place_forget()
+        if isinstance(widget, tk.Widget):  # Check if it's a Tkinter widget
+            try:
+                widget.pack_forget()
+            except:
+                pass # Some widgets might not be packed
+            try:
+                widget.place_forget()
+            except:
+                pass # Some widgets might not be placed
 
     for widget in root.winfo_children():
         if widget not in main_widgets.values() and not isinstance(widget, tk.Menu):
@@ -1131,9 +1182,24 @@ def show_total_assets(root, main_widgets):
     # Total Profit/Loss Crypto
     total_crypto_frame = tk.Frame(root, bg="black")  # Create a new frame
     total_crypto_frame.pack(pady=5, fill="x")      # Pack the new frame
-    total_crypto_label = tk.Label(total_crypto_frame, text="Current Crypto Profit/Loss:", font=("Helvetica", 14, "bold"), fg="lightgreen", bg="black", anchor="w")
+
+    total_crypto_label = tk.Label(
+    total_crypto_frame,
+    textvariable=total_crypto_text,  # Use a StringVar to dynamically update the text
+    font=("Helvetica", 14, "bold"),
+    fg="lightgreen",
+    bg="black",
+    anchor="w"
+    )
     total_crypto_label.pack(side="left", padx=(20, 0))
-    total_crypto_value_label = tk.Label(total_crypto_frame, textvariable=total_pl_var, font=("Helvetica", 14, "bold"), fg="lightgreen", bg="black", anchor="e") # Use StringVar
+    total_crypto_value_label = tk.Label(
+    total_crypto_frame,
+    textvariable=total_pl_var,
+    font=("Helvetica", 14, "bold"),
+    fg="lightgreen",
+    bg="black",
+    anchor="e"
+    )  # Use StringVar
     total_crypto_value_label.pack(side="right", padx=(0, 20))
 
     # Back Button
@@ -1200,7 +1266,7 @@ def call_fear_and_greed():
 
     # Create the root window for the Tkinter GUI
     root = tk.Tk()
-    root.title(" Crypto Fear & Greed Index - Tracker")
+    root.title("Tracker - Crypto Fear & Greed Index")
     #root.geometry("625x400")  # Set the window size
     root.geometry("625x400")  # Set the window size
     root.configure(bg="white")  # Set background color
@@ -1307,25 +1373,74 @@ def call_fear_and_greed():
 # the next time you load a csv file
 
 def call_aggr_window():
-    aggr_path = os.path.join(os.path.dirname(__file__), "aggr_window.py")
-    subprocess.Popen(["python", aggr_path])
+    window = webview.create_window("Tracker Live View AGGR", "https://www.aggr.trade/remr")
+    webview.start()
+    return window.evaluate_js("document.title")
+
+
 
 def call_mempool_window():
-    mem_path = os.path.join(os.path.dirname(__file__), "mem_window.py")
-    subprocess.Popen(["python", mem_path])
+    window = webview.create_window(
+        "Tracker Live View Mempool",
+        "https://mempool.space",
+        frameless=False,
+        transparent=True,
+        confirm_close=True
+    )
+    webview.start()
+    window.destroy()
+    root.destroy()
+    return window.evaluate_js("document.title")
 
 def call_cte_window():
-    cte_path = os.path.join(os.path.dirname(__file__), "cte_window.py")
-    subprocess.Popen(["python", cte_path])
+    window = webview.create_window("Tracker Live View Coin Telegraph", "https://cointelegraph.com/")
+    webview.start()
+    return window.evaluate_js("document.title")
 
 def call_csv_window():
     csv_path = os.path.join(os.path.dirname(__file__), "calcpiv.py")
     subprocess.Popen(["python", csv_path])
 
+def get_coin_id(symbol):
+    """Search for the correct CoinGecko ID using the symbol."""
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1}
+    try:
+        response = requests.get(url, params=params).json()
+        time.sleep(0.5)  # Add a 0.5-second delay
+        if isinstance(response, list):
+            for coin in response:
+                if "symbol" in coin and coin["symbol"].lower() == symbol.lower():
+                    return coin["id"]
+        else:
+            print(f"Warning: Unexpected response format in get_coin_id: {response}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error in get_coin_id: {e}")
+        return None
+    return None
 
+def get_ath(symbol):
+    """Fetch ATH prices in both USD and EUR and return as separate values."""
+    coin_id = get_coin_id(symbol)
 
+    if not coin_id:
+        return None, None
 
-
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+    try:
+        response = requests.get(url).json()
+        time.sleep(0.5)  # Add a 0.5-second delay
+        if "market_data" in response and "ath" in response["market_data"] and "usd" in response["market_data"]["ath"] and "eur" in response["market_data"]["ath"]:
+            ath_usd = response["market_data"]["ath"]["usd"]
+            ath_eur = response["market_data"]["ath"]["eur"]
+            return ath_usd, ath_eur
+        else:
+            print(f"Warning: Could not retrieve ATH data for {symbol} (ID: {coin_id}). Response: {response}")
+            return None, None
+    except requests.exceptions.RequestException as e:
+        print(f"Error in get_ath: {e}")
+        return None, None
 
 
 def open_excel_file(excel_filepath):
@@ -1557,7 +1672,7 @@ def show_main_screen(root):
     coins_dropdown = ttk.Combobox(root, textvariable=selected_coin, values=available_coins, state="readonly")
     coins_dropdown.pack(pady=10)
     coins_dropdown.set(available_coins[0])
-    coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_labels))
+    coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_widgets))
 
     # Save references for later use
     main_widgets = {
@@ -1581,10 +1696,10 @@ def show_main_screen(root):
         root.after_cancel(after_id)
 
     # Start the periodic GUI update for the main screen
-    after_id = root.after(10000, update_gui, root, main_labels)
+    after_id = root.after(10000, update_gui, root, main_widgets)
 
     # Perform an immediate update of the values
-    update_gui(root, main_labels)
+    update_gui(root, main_widgets)
 
 
 
@@ -1596,7 +1711,7 @@ def show_about_window(root, main_widgets):
 
     about_window = tk.Toplevel(root)
     about_window.title("About")
-    about_window.geometry("400x300")  # Same size as Cold Storage window
+    about_window.geometry("400x400")  # Same size as Cold Storage window
 
     text_frame = ttk.Frame(about_window)
     text_frame.pack(expand=True, fill='both')
@@ -1612,7 +1727,7 @@ def show_about_window(root, main_widgets):
 
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        about_path = os.path.join(script_dir, "readme.md")
+        about_path = os.path.join(script_dir, "README.md")
         with open(about_path, "r", encoding="utf-8") as f:
             about_content_md = f.read()
             about_content_html = markdown.markdown(about_content_md)
@@ -1621,11 +1736,11 @@ def show_about_window(root, main_widgets):
             about_text.insert(tk.END, "About\n", "heading")
             about_text.insert(tk.END, about_content_html)
     except FileNotFoundError:
-        about_text.insert(tk.END, "Error: readme.md not found.")
-        logging.error("readme.md not found")
+        about_text.insert(tk.END, "Error: README.md not found.")
+        logging.error("README.md not found")
     except Exception as e:
-        about_text.insert(tk.END, f"Error reading readme.md: {e}")
-        logging.error(f"Error reading readme.mdt: {e}")
+        about_text.insert(tk.END, f"Error reading README.md: {e}")
+        logging.error(f"Error reading README.md: {e}")
     about_text.config(state=tk.DISABLED)  # Make it read-only
 
     def on_close():
@@ -1640,6 +1755,9 @@ def show_about_window(root, main_widgets):
 
 def main(root=None):
     global selected_coin, is_tracker_active, coin_symbols, menubar, main_widgets
+    global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol
+    ath_price_eur = 0
+    ath_price_usd = 0
 
     initial_width = 600
     initial_height = 300
@@ -1653,6 +1771,7 @@ def main(root=None):
             root.title("Crypto Price Tracker V1.0")
             root.configure(bg="black")
             menubar = Menu(root)
+            print(root)
             print(f"New root created: {root}, menubar: {menubar}")
 
             def call_show_warm_storage():
@@ -1690,13 +1809,12 @@ def main(root=None):
             menubar.add_cascade(label="Live View", menu=external_menu)
             external_menu.add_command(label="Fear and Greed", command=call_fear_and_greed)
             external_menu.add_command(label="AGGR Live View", command=call_aggr_window)
-            external_menu.add_command(label="Mempool", command=call_mempool_window)
+            external_menu.add_command(label="Mempool", command=lambda: call_mempool_window())
             external_menu.add_command(label="CoinTelegraph", command=call_cte_window)
 
             # History Menu / CSV menu
             History_menu = Menu(menubar, tearoff=0)
             menubar.add_cascade(label="CSV Data", menu=History_menu)
-            #History_menu.add_command(label="Load & Calculate", command=lambda: print("Will be here "))
             History_menu.add_command(label="Load & Calculate", command=call_csv_window)
 
 
@@ -1726,6 +1844,7 @@ def main(root=None):
         print(f"Widgets in root bij terugkeer: {root.winfo_children()}")
 
     selected_coin = tk.StringVar(root)
+
 
     try:
         root.geometry(f"{initial_width}x{initial_height}")
@@ -1762,19 +1881,45 @@ def main(root=None):
         main_labels['footer_date'] = tk.Label(main_labels['footer_frame'], text="Loading...", font=("Helvetica", 16), fg="yellow", bg="black")
         main_labels['footer_date'].pack(side="left")
 
+
+        # Create and pack the bottom left frame and ATH label
+        ath_label_text = tk.StringVar()
+        ath_label_text.set("Loading ATH...") # Set initial text
+        ath_label = tk.Label(
+            root, # Parent is now root
+            textvariable=ath_label_text,
+            font=small_font,
+            fg="cyan",
+            bg="black",
+            anchor="sw"
+        )
+        ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
+
+        print(" before ",ath_price_eur)
+
+
         eur_usd_rate = scrape_eur_usd()
+
         exchange_rate_text = "Rate: Loading..."
         if eur_usd_rate is not None:
             usd_eur_rate = 1 / eur_usd_rate if eur_usd_rate != 0 else "N/A"
             exchange_rate_text = f"Rate: €{eur_usd_rate:.4f} / ${usd_eur_rate:.4f}"
 
-        exchange_rate_label = tk.Label(root, text=exchange_rate_text, font=small_font, fg="cyan", bg="black", anchor="se")
-        exchange_rate_label.place(relx=1.0, rely=1.0, anchor="se")
+
+        exchange_rate_label = tk.Label(root, text=exchange_rate_text, font=("Helvetica", 10), fg="cyan", bg="black", anchor="se")
+        exchange_rate_label.place(relx=1.0, rely=1.0, anchor="se", x=-10, y=-10)
+        ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
+
+
+
 
         coins_dropdown = ttk.Combobox(root, textvariable=selected_coin, values=available_coins, state="readonly")
         coins_dropdown.pack()
         coins_dropdown.set(available_coins[0])
-        coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_labels))
+        coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_widgets))
+        print(selected_coin.get())
+        print(ath_price_eur, ath_price_usd)
+        print("3e Coin printed")
 
         global main_widgets
         main_widgets = {
@@ -1790,7 +1935,10 @@ def main(root=None):
             'footer_text': main_labels['footer_text'],
             'footer_date': main_labels['footer_date'],
             'coins_dropdown': coins_dropdown,
-            'exchange_rate_label': exchange_rate_label
+            'exchange_rate_label': exchange_rate_label,
+            'ath_label' : ath_label,
+            'ath_label_text': ath_label_text, # Add the StringVar here
+            #'ath_label_text': ath_label_text
         }
 
         def on_closing():
@@ -1803,7 +1951,7 @@ def main(root=None):
         root.protocol("WM_DELETE_WINDOW", on_closing)
 
         is_tracker_active = True
-        root.after(100, update_gui, root, main_labels)
+        root.after(100, update_gui, root, main_widgets)
 
     except Exception as e:
         logging.error(f"General error in main after initialisation): {e}")
