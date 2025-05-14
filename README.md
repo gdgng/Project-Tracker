@@ -14,9 +14,6 @@ If you use the program and make adjustments, please let me know. Woukd like to l
 
 Main program: tracker.py needs tracker.xlsx
 sub programs:
-  - aggr_window.py (Live View)
-  - mem_window.py (Live View)
-  - cte_window.py (live View)
   - calcpiv.py (load and calculte csv-file)
   - README.MD
 
