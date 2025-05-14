@@ -34,10 +34,10 @@ Will shows all the coins from the exchange with coin name, rate (in EUR), amount
 Screen refreshes every 20 seconds.
 
 **Option Input Stocks**
-Currently still working on the api for this. option is now manually and asks for the totsl stock value. 
+Currently still working on the api for this. option is now manually and asks for the total stock value. 
 If used, it will be shown on the total assets screen
 
-**Option Yotal Assets**
+**Option Total Assets**
 Shows Warm Storage, Cold Storage, Stock (if available) and gives Total Assets. If a csv file has been read and calculated
 it will show the amount of money inut in the exchange,the amount money taken out of the exchange The current Total Invest 
 and the Profit/loss
