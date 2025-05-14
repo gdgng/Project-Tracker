@@ -39,7 +39,7 @@ If used, it will be shown on the total assets screen
 
 **Option Total Assets**
 Shows Warm Storage, Cold Storage, Stock (if available) and gives Total Assets. If a csv file has been read and calculated
-it will show the amount of money inut in the exchange,the amount money taken out of the exchange The current Total Invest 
+it will show the amount of money put in the exchange,the amount money taken out of the exchange The current Total Invest 
 and the Profit/loss
 
 **Live View Fear and Greed**
