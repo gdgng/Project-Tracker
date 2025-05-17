@@ -39,7 +39,8 @@ Screen refreshes every 20 seconds.
 
 **Option Input Stocks**
 Currently still working on the api for this. Option is currently manual, and asks for the total stock value. 
-If used, it will be shown on the total assets screen
+If used, it will be shown on the total assets screen.
+
 ![InputStocks](https://github.com/user-attachments/assets/e9643a96-106e-4dae-b675-8b6c8bcc189e)
 
 
