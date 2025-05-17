@@ -375,7 +375,7 @@ def browse_file():
                         data['invest'],  # Use the per-coin investment
                         data['profit_loss']
                     ))
-
+            print("In -->",eur_in_total)
             eur_in_label.config(text=f"Total EUR In: € {eur_in_total}")
             eur_out_label.config(text=f"Total EUR Out: € {eur_out_total}")
             total_invest_label.config(text=f"Total Invest: € {total_invest_overall}") # Display overall investment

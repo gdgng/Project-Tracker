@@ -719,7 +719,7 @@ def show_cold_storage(root, main_widgets):
             no_assets_label.pack()
 
         # Create "Back" button
-        back_button = tk.Button(root, text="Back to Tracker", command=back_to_main_cold, bg="grey", fg="white",
+        back_button = tk.Button(root, text="Back", command=back_to_main_cold, bg="grey", fg="white",
                                 font=("Helvetica", 14))
         back_button.pack(pady=20)
 
@@ -767,10 +767,11 @@ def show_cold_storage(root, main_widgets):
         # Show main tracker screen
         show_main_screen(root)
 
-    # Hide main screen widgets
-    for widget in main_widgets.values():
-        widget.pack_forget()
-        widget.place_forget()
+    # Hide main screen widgets // Changed and blocked aout because of stringvar and no need to hide
+    #for widget in main_widgets.values():
+        #widget.pack_forget()
+        #widget.place_forget()
+
 
     # Destroy other widgets (except menus)
     for widget in root.winfo_children():
@@ -1026,7 +1027,7 @@ def show_total_assets(root, main_widgets):
         if status_label and status_label.winfo_exists():  # Ensure status_label exists
             symbols = ["🔄", "🔃"]
             frame_interval = 300  # 300 ms per frame
-            total_animation_time = 2000  # 2 seconds total
+            total_animation_time = 4000  # 2 seconds total
 
             def animate(frame_idx=0, elapsed=0):
                 if elapsed < total_animation_time:
