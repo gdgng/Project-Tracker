@@ -71,6 +71,12 @@ Opens a mempool window.
 
 ![Mempool](https://github.com/user-attachments/assets/da446916-db53-4091-8749-6c687f871800)
 
+**Live View Cointelegraph**
+Same routine. Shows website. These option wil be changable in the parameters section (still have to build that one) 
+
+![CoinTele](https://github.com/user-attachments/assets/c63f16a7-86da-4726-89c4-6db0fafe3f46)
+
+
 
 
 
