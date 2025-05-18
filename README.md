@@ -81,9 +81,11 @@ hese option wil be changable in the parameters section (still have to build this
 
 **CSV Data -Load and Calculate**
 Reads a CSV file (Currently BITVAVO's )
+This is the seperate program calcpiv.py.
 Caculates per coin total current amount, Average bought value, total investment, profit and loss, etc
-Will populate trackerxls with the raw data, pivot table detailed and pivot tavle summary. 
+Will populate tracker.xls with the raw data, pivot table detailed and pivot tavle summary. 
 Still work in progress. 
+
 ![csv_load_calc](https://github.com/user-attachments/assets/fc745e17-a050-477c-9e6c-5889de435387)
 
 
