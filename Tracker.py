@@ -1,11 +1,13 @@
 # -------------------------------------------------------------------------------------------------
 # File: tracker.py
 # GDGNG
-# Main Program 
 # 12-04-2025 V0.9
 # 14-04-2025 V0.95
 # 17-04-2025 V1.0
-# 12-05-2025 V1.01 Changes in update warm,cold & total assets (no update_gui when shown), visual changes to Fear and Greed
+# 12-05-2025 V1.01 Changes in update warm,cold & total assets (no update_gui when shown),
+#            visual changes to Fear and Greed
+# 21-05-2025 V1.05 Changes in correctly handling
+#            update screens for Warm, Cold and Total. No label errors
 #--------------------------------------------------------------------------------------------------
 # Bitcoin_tracker EUR/USD Value. Gets the EUR value from an exchange, site scraping for the current
 # dollar value.
@@ -26,8 +28,10 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import Menu
 from tkinter import messagebox
+from tkinter import Button, PhotoImage
+from PIL import Image, ImageTk  # For image resizing
 import tkinter.scrolledtext as tkscroll
-from datetime import date
+from datetime import date, datetime
 import requests
 from bs4 import BeautifulSoup
 import time
@@ -53,6 +57,34 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#
 #from calcpiv import load_csv_calculate
 import logging
 #logging.basicConfig(level=logging.DEBUG)
+
+# --- Global Variables (Module Level Initialization) ---
+# These variables are declared here to ensure they exist in the global scope
+# before any function might try to access them. They are initialized to None
+# or default values. Functions like show_total_assets will then manage them.
+is_tracker_active = False
+updater_job_total = None
+status_label_total = None
+status_label_total = None
+btc_label = None
+back_button = None
+
+# Other globals needed for calculations that might be updated elsewhere
+total_stocks = 0.0
+T_EUR_I = 0.0
+T_EUR_O = 0.0
+T_INVST = 0.0
+T_PL = 0.0
+pl_percentage = 0.0
+total_stock_value = 0.0
+
+# Tkinter StringVars for updating labels - also declared globally
+warm_value_var = None
+cold_value_var = None
+total_assets_value_var = None
+total_perc_var = None
+total_crypto_text_var = None
+total_pl_var = None
 
 class SimpleMarkdownText(tkscroll.ScrolledText):
     """
@@ -230,6 +262,11 @@ def get_warm_exchange_ticker(market):
     return warm_exchange_req('GET', f"ticker/price?market={market}")
 
 
+def get_coin_exchange_ticker(market):
+    return warm_exchange_req('GET', f"ticker/price?market={market}")
+
+
+
 def get_warm_exchange_balance():
     data = warm_exchange_req('GET', "balance")
     if data:
@@ -270,10 +307,7 @@ def scrape_eur_usd():
 
 def update_gui(root, labels):
     global previous_prices, selected_coin, balances, is_tracker_active, after_id
-    global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol
-
-    print("update_gui called") ## DEBUG:
-    print(is_tracker_active) ##  DEBUG:
+    global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol, ath_cache
 
 
 
@@ -281,6 +315,7 @@ def update_gui(root, labels):
     # Should be inactive or False by Warm Storage, Cold Storage and Total Assets
     if stop_event.is_set() or not is_tracker_active or not root.winfo_exists():
         print("update_gui: stopped due to event, inactive state, or missing root window")
+
         return
 
     crypto = selected_coin.get() if selected_coin else None
@@ -372,8 +407,14 @@ def update_gui(root, labels):
             ath_label_var = labels['ath_label_text']
             usd_display = f"${ath_price_usd:.2f}" if ath_price_usd is not None else "N/A"
             eur_display = f"€{ath_price_eur:.2f}" if ath_price_eur is not None else "N/A"
-            ath_label_var.set(f"Ath: {eur_display}, {usd_display}")
+            ath_label_var.set(f"Ath: {eur_display} / {usd_display}")
             print(f"ATH Label StringVar set to: {ath_label_var.get()}")
+            # more persitent way
+            ath_cache = {
+            "eur": ath_price_eur,
+            "usd": ath_price_usd} if ath_price_eur is not None and ath_price_usd is not None else {"eur": 0.0, "usd": 0.0}
+
+
     else:
         # If fetching data failed, update labels accordingly
         if 'eur_value' in labels and tk.Frame.winfo_exists(labels['eur_value'].master):
@@ -465,14 +506,23 @@ def about():
 
 
 def show_warm_storage(root):
-    global is_tracker_active, updater_job_warm, status_label_warm
+    global is_tracker_active, updater_job_warm, status_label_warm, btc_label, back_button
+    root.title("Warm Storage - Crypto Price Tracker V1.05")
+    root.iconbitmap("ThermoWarm.ico")  # Your .ico file path here
+    root.configure(bg="black")
+
     is_tracker_active = False
     updater_job_warm = None
     status_label_warm = None
-    print(is_tracker_active)
+    btc_label = None
+    back_button = None
+    for menu in menubar.children.values():  # Iterate through all menus
+
+        for i in range(menu.index('end') + 1):  # Loop through each item
+            menu.entryconfig(i, state="disabled")  # Disable each item
+
     def update_warm_storage():
-        """Refresh warm storage display and animate status"""
-        global updater_job_warm, status_label_warm
+        global updater_job_warm, status_label_warm, btc_label, back_button
 
         balances = get_warm_exchange_balance()
         prices = {}
@@ -480,38 +530,35 @@ def show_warm_storage(root):
         for coin in balances:
             try:
                 if coin == "EUR":
-                    prices[coin] = {"eur_rate": 1.0}  # EUR as constant value
+                    prices[coin] = {"eur_rate": 1.0}
                 else:
                     ticker = get_crypto_ticker(coin)
-                    if ticker and 'eur_rate' in ticker:
-                        prices[coin] = ticker
-                    else:
-                        logging.warning(f"Geen geldige EUR-prijs voor {coin}")
-                        prices[coin] = {"eur_rate": None}
+                    prices[coin] = ticker if ticker and 'eur_rate' in ticker else {"eur_rate": None}
             except Exception as e:
                 logging.error(f"Fout bij ophalen prijs voor {coin}: {e}")
                 prices[coin] = {"eur_rate": None}
 
+        # Clean screen, preserve essential widgets
         for widget in root.winfo_children():
-            if widget not in [status_label_warm] and not isinstance(widget, tk.Menu):
+            if widget not in [status_label_warm, btc_label, back_button] and not isinstance(widget, tk.Menu):
                 widget.destroy()
 
         root.geometry("700x700")
         root.configure(bg="black")
 
+        # Title
         assets_label = tk.Label(root, text="Warm Storage Assets", font=("Helvetica", 20, "bold"), fg="orange", bg="black")
         assets_label.pack(pady=10)
 
         if balances:
             sorted_balances = sorted(balances.items())
-            displayed_coins = []  # Create an empty list to store coins to display
+            displayed_coins = []
 
             coin_width = len("Coin")
             price_width = len("Rate (EUR)")
             amount_width = len("Amount Coins")
             value_width = len("Value (EUR)")
 
-            # First loop: Identify coins to display and calculate max widths
             for coin, balance_data in sorted_balances:
                 available = balance_data['available']
                 in_order = balance_data['in_order']
@@ -519,91 +566,146 @@ def show_warm_storage(root):
                 eur_price = prices.get(coin, {}).get('eur_rate')
                 eur_value = total_amount * eur_price if eur_price is not None else None
 
-                if eur_value is not None and eur_value >= 0.1:  # Corrected condition
+                if eur_value is not None and eur_value >= 0.1:
                     displayed_coins.append((coin, balance_data, eur_price, eur_value))
                     coin_width = max(coin_width, len(coin))
-                    price_width = max(price_width, len(f"{eur_price:.2f}") if eur_price is not None else len("N/A"))
+                    price_width = max(price_width, len(f"{eur_price:.2f}" if eur_price else "N/A"))
                     amount_width = max(amount_width, len(f"{total_amount:.4f}"))
-                    value_width = max(value_width, len(f"{eur_value:.2f}") if eur_value is not None else len("N/A"))
-                    #print(f"Processing and displaying coin with EUR value: {eur_value}")
-                else:
-                    None
+                    value_width = max(value_width, len(f"{eur_value:.2f}" if eur_value else "N/A"))
 
+            # Headers
             header_frame = tk.Frame(root, bg="black")
             header_frame.pack()
 
-            coin_header = tk.Label(header_frame, text="Coin", font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="w")
-            coin_header.pack(side="left")
-            price_header = tk.Label(header_frame, text="Rate (EUR)", font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="e")
-            price_header.pack(side="left", padx=(20, 0))
-            amount_header = tk.Label(header_frame, text="Amount Coins", font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="e")
-            amount_header.pack(side="left", padx=(20, 0))
-            value_header = tk.Label(header_frame, text="Value (EUR)", font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="e")
-            value_header.pack(side="left", padx=(20, 0))
+            for text, width, anchor in [
+                ("Coin", coin_width, "w"),
+                ("Rate (EUR)", price_width, "e"),
+                ("Amount Coins", amount_width, "e"),
+                ("Value (EUR)", value_width, "e")
+            ]:
+                tk.Label(header_frame, text=text, font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor=anchor).pack(side="left", padx=(20 if anchor == "e" else 0, 0))
 
-            # Second loop: Iterate through the filtered list to create display elements
+            # Coin rows
             for coin, balance_data, eur_price, eur_value in displayed_coins:
-                available = balance_data['available']
-                in_order = balance_data['in_order']
-                total_amount = available + in_order
+                total_amount = balance_data['available'] + balance_data['in_order']
 
                 row_frame = tk.Frame(root, bg="black")
                 row_frame.pack()
 
-                coin_label = tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg="white", bg="black", width=coin_width, anchor="w")
-                coin_label.pack(side="left")
-                price_label = tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price is not None else "N/A",
-                                         font=("Helvetica", 12), fg="white" if eur_price is not None else "red", bg="black",
-                                         width=price_width, anchor="e")
-                price_label.pack(side="left", padx=(20, 0))
-                amount_label = tk.Label(row_frame, text=f"{total_amount:.4f}",
-                                          font=("Helvetica", 12), fg="white", bg="black",
-                                          width=amount_width, anchor="e")
-                amount_label.pack(side="left", padx=(20, 0))
-                value_label = tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value is not None else "N/A",
-                                         font=("Helvetica", 12), fg="white" if eur_value is not None else "red", bg="black",
-                                         width=value_width + 1, anchor="e")
-                value_label.pack(side="left", padx=(20, 0))
+                tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg="white", bg="black", width=coin_width, anchor="w").pack(side="left")
+                tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price else "N/A",
+                         font=("Helvetica", 12), fg="white" if eur_price else "red", bg="black",
+                         width=price_width, anchor="e").pack(side="left", padx=(20, 0))
+                tk.Label(row_frame, text=f"{total_amount:.4f}",
+                         font=("Helvetica", 12), fg="white", bg="black",
+                         width=amount_width, anchor="e").pack(side="left", padx=(20, 0))
+                tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A",
+                         font=("Helvetica", 12), fg="white" if eur_value else "red", bg="black",
+                         width=value_width + 1, anchor="e").pack(side="left", padx=(20, 0))
 
-            total_eur_value = sum(
-                (item[1]['available'] + item[1]['in_order']) * item[2]
-                for item in displayed_coins if item[2] is not None
-            )
-            total_label = tk.Label(root, text=f"Total Warm Storage Value: €{total_eur_value:.2f}", font=("Helvetica", 14, "bold"),
-                                     fg="orange", bg="black")
+
+            # Totals
+            total_eur_value = sum((item[1]['available'] + item[1]['in_order']) * item[2]
+                                  for item in displayed_coins if item[2] is not None)
+            total_label = tk.Label(root, text=f"Total Warm Storage Value: €{total_eur_value:.2f}",
+                                   font=("Helvetica", 14, "bold"), fg="orange", bg="black")
             total_label.pack(pady=10)
-        else:
-            no_assets_label = tk.Label(root, text="No Assets Found.", font=("Helvetica", 16), fg="white", bg="black")
-            no_assets_label.pack()
 
-        back_button = tk.Button(root, text="Back", command=back_to_main_warm,
-                                 bg="grey", fg="white", font=("Helvetica", 14))
-        back_button.pack(pady=20)
+
+        else:
+            tk.Label(root, text="No Assets Found.", font=("Helvetica", 16), fg="white", bg="black").pack()
+
+        # Persistent widgets
+        if btc_label is None or not btc_label.winfo_exists():
+            btc_label = tk.Label(root, text="", font=("Helvetica", 12), fg="white", bg="black", anchor="sw")
+            btc_label.place(x=195, y=660)
+
+        if back_button is None or not back_button.winfo_exists():
+            img = Image.open("back_blue.png").resize((20, 20))
+            img_tk = ImageTk.PhotoImage(img)
+
+            back_button = Button(
+                root,
+                image=img_tk,
+                command=back_to_main_warm,  # Pass the function reference, not its call
+                bg="grey",
+                activebackground="forestgreen",
+                highlightbackground="white",
+                # Remove bd=0 or set it to a value > 0 to see relief
+                bd=5,  # Set border width to 5 for visibility
+                relief="raised",# Now relief will be visible
+                width = 35
+            )
+            back_button.bind("<Enter>", on_hover)
+            back_button.bind("<Leave>", on_leave)
+            back_button.place(x=630, y=660)
+            back_button.image = img_tk
 
         animate_status()
         updater_job_warm = root.after(10000, update_warm_storage)
 
     def animate_status():
+
         symbols = ["🔄", "🔃"]
         frame_interval = 300
-        total_animation_time = 2000
-        elapsed = 0
+        total_animation_time = 3000
 
         def animate(frame_idx=0, elapsed=0):
             if elapsed < total_animation_time:
-                if status_label_warm is not None and status_label_warm.winfo_exists():
-                    status_label_warm.config(text=f"{symbols[frame_idx % len(symbols)]}", fg="cyan")
+                if status_label_warm and status_label_warm.winfo_exists():
+                    status_label_warm.config(text=symbols[frame_idx % len(symbols)], fg="cyan")
+                    if btc_label and btc_label.winfo_exists():
+                        btc_label.config(text="")
                 root.after(frame_interval, animate, frame_idx + 1, elapsed + frame_interval)
             else:
-                if status_label_warm is not None and status_label_warm.winfo_exists():
+                if status_label_warm and status_label_warm.winfo_exists():
                     status_label_warm.config(text="✅", fg="lightgreen")
+                try:
+                    btc_val = get_coin_exchange_ticker('BTC-EUR')
+                    btc_price = btc_val.get("price", "N/A")
+                    btc_price_str = btc_val.get("price", "N/A") # Get it as a string
+
+                    display_btc_price = "N/A" # Default to "N/A"
+
+                    if isinstance(btc_price_str, str) and btc_price_str != "N/A":
+                        try:
+                            btc_price_float = float(btc_price_str)
+                            formatted_btc_price = f"{btc_price_float:.2f}"
+                        except ValueError:
+                            # Handle cases where the string isn't a valid float
+                            # For example, if it's "Error" or an empty string
+                            formatted_btc_price = "Error" # Or any other appropriate message
+
+                    if btc_label and btc_label.winfo_exists():
+                            eur_usd_rate = scrape_eur_usd()
+
+                            try:
+                                btc_price_usd = float(btc_price) * eur_usd_rate
+                                formatted_price = str(round(btc_price_usd))
+
+                            except ValueError:
+                                print("Error: btc_price is not a valid number!")
+
+                            btc_label.config(text=" Current Bitcoin Price: € " + btc_price + " / $ " + formatted_price, fg="white")
+
+
+
+                except Exception as e:
+                    logging.error(f"BTC price fetch failed: {e}")
 
         animate()
 
     def back_to_main_warm():
+        root.title("Main - Crypto Price Tracker V1.05")
+        root.iconbitmap("MoB.ico")  # Your .ico file path here
+        root.configure(bg="black")
         global is_tracker_active, updater_job_warm
         is_tracker_active = True
-        if updater_job_warm is not None:
+        for menu in menubar.children.values():
+            for i in range(menu.index('end') + 1):
+                menu.entryconfig(i, state="normal")
+
+        if updater_job_warm:
             root.after_cancel(updater_job_warm)
             updater_job_warm = None
         for widget in root.winfo_children():
@@ -611,13 +713,15 @@ def show_warm_storage(root):
                 widget.destroy()
         show_main_screen(root)
 
+    # Clear current widgets
     for widget in root.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.pack_forget()
             widget.place_forget()
             widget.destroy()
 
-    status_label_warm = tk.Label(root, text="", font=("Helvetica", 10), fg="orange", bg="black", anchor="sw")
+    # Status label
+    status_label_warm = tk.Label(root, text="", font=("Helvetica", 18), fg="orange", bg="black", anchor="sw")
     status_label_warm.place(x=20, y=660)
 
     update_warm_storage()
@@ -626,17 +730,24 @@ def show_warm_storage(root):
 
 
 
-
 def show_cold_storage(root, main_widgets):
     # Globals to manage tracker status, update job, and status label
-    global is_tracker_active, updater_job_cold, status_label_cold
+    global is_tracker_active, updater_job_cold, status_label_cold, btc_label, back_button
+    root.title("Cold Storaqge - Crypto Price Tracker V1.05")
+    root.iconbitmap("ThermoCold.ico")  # Your .ico file path here
+    root.configure(bg="black")
     is_tracker_active = False
     updater_job_cold = None
     status_label_cold = None
+    btc_label = None
+    back_button = None
+    for menu in menubar.children.values():  # Iterate through all menus
+        for i in range(menu.index('end') + 1):  # Loop through each item
+            menu.entryconfig(i, state="disabled")  # Disable each item
 
     def update_cold_storage():
         """Refresh cold storage display and animate status"""
-        global updater_job_cold, status_label_cold
+        global updater_job_cold, status_label_cold, btc_label, back_button
 
         # Get updated cold storage balances and latest prices
         cold_storage_balances = get_cold_storage_balance()
@@ -719,10 +830,31 @@ def show_cold_storage(root, main_widgets):
             no_assets_label = tk.Label(root, text="No Cold Storage Assets Found.", font=("Helvetica", 16), fg="lightblue", bg="black")
             no_assets_label.pack()
 
-        # Create "Back" button
-        back_button = tk.Button(root, text="Back", command=back_to_main_cold, bg="grey", fg="white",
-                                font=("Helvetica", 14))
-        back_button.pack(pady=20)
+        # Persistent widgets
+        if btc_label is None or not btc_label.winfo_exists():
+            btc_label = tk.Label(root, text="", font=("Helvetica", 12), fg="white", bg="black", anchor="sw")
+            btc_label.place(x=195, y=660)
+
+        if back_button is None or not back_button.winfo_exists():
+            img = Image.open("back_blue.png").resize((20, 20))
+            img_tk = ImageTk.PhotoImage(img)
+
+            back_button = Button(
+                root,
+                image=img_tk,
+                command=back_to_main_cold,  # Pass the function reference, not its call
+                bg="grey",
+                activebackground="forestgreen",
+                highlightbackground="white",
+                # Remove bd=0 or set it to a value > 0 to see relief
+                bd=5,  # Set border width to 5 for visibility
+                relief="raised", # Now relief will be visible
+                width=35
+            )
+            back_button.bind("<Enter>", on_hover)
+            back_button.bind("<Leave>", on_leave)
+            back_button.place(x=630, y=660)
+            back_button.image = img_tk
 
         # Start animation for status symbol
         animate_status()
@@ -734,7 +866,7 @@ def show_cold_storage(root, main_widgets):
         """Animate the status label showing update progress"""
         symbols = ["🔄", "🔃"]  # Rotating update symbols
         frame_interval = 300   # Time between symbol changes
-        total_animation_time = 2000  # Total animation duration (2 sec)
+        total_animation_time = 3000  # Total animation duration (3 sec)
         elapsed = 0
 
         def animate(frame_idx=0, elapsed=0):
@@ -744,53 +876,64 @@ def show_cold_storage(root, main_widgets):
                     status_label_cold.config(text=f"{symbols[frame_idx % len(symbols)]}", fg="cyan")
                 root.after(frame_interval, animate, frame_idx + 1, elapsed + frame_interval)
             else:
-                # After animation, show ✅
-                if status_label_cold is not None and status_label_cold.winfo_exists():
+                if status_label_cold and status_label_cold.winfo_exists():
                     status_label_cold.config(text="✅", fg="lightgreen")
+                try:
+                    btc_val = get_coin_exchange_ticker('BTC-EUR')
+                    btc_price = btc_val.get("price", "N/A")
+                    if btc_label and btc_label.winfo_exists():
+                        eur_usd_rate = scrape_eur_usd()
 
+                        try:
+                            btc_price_usd = float(btc_price) * eur_usd_rate
+                            formatted_price = str(round(btc_price_usd))
+
+                        except ValueError:
+                            print("Error: btc_price is not a valid number!")
+
+                        btc_label.config(text=" Current Bitcoin Price: € " + btc_price + " / $ " + formatted_price, fg="white")
+
+                except Exception as e:
+                    logging.error(f"BTC price fetch failed: {e}")
         animate()
 
+
     def back_to_main_cold():
-        """Stop updating and return to main screen"""
+        root.title("Main - Crypto Price Tracker V1.05")
+        root.iconbitmap("MoB.ico")  # Your .ico file path here
+        root.configure(bg="black")
         global is_tracker_active, updater_job_cold
         is_tracker_active = True
-
-        # Stop scheduled updates
-        if updater_job_cold is not None:
+        for menu in menubar.children.values():
+            for i in range(menu.index('end') + 1):
+                menu.entryconfig(i, state="normal")
+        if updater_job_cold:
             root.after_cancel(updater_job_cold)
             updater_job_cold = None
-
-        # Clear cold storage widgets
         for widget in root.winfo_children():
-            if widget not in main_widgets.values() and not isinstance(widget, tk.Menu):
+            if not isinstance(widget, tk.Menu):
                 widget.destroy()
-
-        # Show main tracker screen
         show_main_screen(root)
 
-    # Hide main screen widgets // Changed and blocked aout because of stringvar and no need to hide
-    #for widget in main_widgets.values():
-        #widget.pack_forget()
-        #widget.place_forget()
-
-
-    # Destroy other widgets (except menus)
+    # Clear current widgets
     for widget in root.winfo_children():
-        if widget not in main_widgets.values() and not isinstance(widget, tk.Menu):
+        if not isinstance(widget, tk.Menu):
+            widget.pack_forget()
+            widget.place_forget()
             widget.destroy()
 
-    # Create and place the status label only once (fixed position)
-    status_label_cold = tk.Label(root, text="", font=("Helvetica", 12), fg="cyan", bg="black", anchor="sw")
+    # Status label
+    status_label_cold = tk.Label(root, text="", font=("Helvetica", 18), fg="cyan", bg="black", anchor="sw")
     status_label_cold.place(x=20, y=660)
 
-    # Start first update
     update_cold_storage()
 
 
 
-
 def set_total_stocks(parent):
+
     filename='tracker.xlsx'
+
     def save_and_close():
         global total_stocks
         try:
@@ -805,22 +948,14 @@ def set_total_stocks(parent):
             try:
                 ws = wb['Stocks']
             except KeyError:
-                ws = wb.create_sheet('stocks')
-                ws['C1'] = 1
+                ws = wb.create_sheet('Stocks')
 
-            counter_value = ws['C1'].value
-            if counter_value is None:
-                next_row = 1
-            else:
-                try:
-                    next_row = int(counter_value)
-                except ValueError:
-                    messagebox.showerror("Error", "Invalid counter value in C1.")
-                    return
+            latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=3)
+            next_row = latest_row + 1
 
             ws['A' + str(next_row)] = today
             ws['B' + str(next_row)] = total_stocks
-            ws['C1'] = next_row + 1
+
             wb.save(filename)
             print("Data written to Excel.")
             # --- End Excel Writing Logic ---
@@ -895,23 +1030,183 @@ def find_eur_and_get_amounts(file_path):
         return None, None
 
 
+def on_hover(event):
+    event.widget.config(bg="lightblue")
 
+def on_leave(event):
+    event.widget.config(bg="grey")
+
+# Writes values Total Assets screen to tracker.xls sheet=
+def write_totals(total_warm_value, total_cold_value, total_stocks_value, total_assets_value,
+                 amount_deposit, amount_withdraw, t_invest, T_PL, pl_percentage, btc_price):
+
+
+
+    file_name = "tracker.xlsx"
+    """Opens or creates an Excel file and writes totals on the latest row + 1"""
+    columns = ["Date", "Warm Storage", "Cold Storage", "Value Stocks", "Total Assets",
+               "--------", "EURO In", "EURO Out", "Investment", "Total P/L", "Percentage",
+               "----", "Bitcoin Price"]
+
+    try:
+        # Try to open the workbook, create if it doesn't exist
+        wb = openpyxl.load_workbook(file_name)
+    except FileNotFoundError:
+        wb = openpyxl.Workbook()
+
+    # Check if worksheet exists, else create it
+    if "Assets_History" in wb.sheetnames:
+        ws = wb["Assets_History"]
+    else:
+        ws = wb.create_sheet("Assets_History")
+
+        # Add column headers
+        for col_index, col_name in enumerate(columns, start=1):
+            ws.cell(row=1, column=col_index, value=col_name)
+
+        # Set column width to 15
+        for col_index in range(1, len(columns) + 1):
+            ws.column_dimensions[get_column_letter(col_index)].width = 15
+
+    # Find the latest filled row
+    latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=1)
+    def clean_numeric(value):
+        """Removes currency symbols and converts to float"""
+        if isinstance(value, str):
+            return float(value.replace("€", "").replace(",", ""))
+        return float(value)
+
+
+    # Write data in the next available row
+    next_row = latest_row + 1
+
+    # Write values to the worksheet
+    ws.cell(row=next_row, column=1, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))  # Date & Time
+    ws.cell(row=next_row, column=2, value=clean_numeric(total_warm_value))  # Warm Storage
+    ws.cell(row=next_row, column=3, value=clean_numeric(total_cold_value)) # Cold Storage
+    ws.cell(row=next_row, column=4, value=total_stocks_value)  # Value Stocks
+    ws.cell(row=next_row, column=5, value=clean_numeric(total_assets_value))  # Total Assets
+    ws.cell(row=next_row, column=7, value=clean_numeric(amount_deposit))  # EURO In
+    ws.cell(row=next_row, column=8, value=clean_numeric(amount_withdraw))  # EURO Out
+    ws.cell(row=next_row, column=9, value=t_invest)  # Investment
+    ws.cell(row=next_row, column=10, value=clean_numeric(T_PL))  # Investment
+    ws.cell(row=next_row, column=11, value=pl_percentage)  # Percentage
+    ws.cell(row=next_row, column=13, value=clean_numeric(str(btc_price)))  # Bitcoin Price
+
+
+
+
+    # Save the workbook
+    wb.save(file_name)
+
+    print(f"Data written to '{file_name}' in worksheet 'Assets_History' at row {next_row}")
+
+# Writes values Warm Assets screen to tracker.xls sheet
+def write_warm(coin, amount, rate, value):
+
+
+
+    file_name = "tracker.xlsx"
+    """Opens or creates an Excel file and writes totals on the latest row + 1"""
+    columns = ["Date", "Coin", "Amount", "Rate (EUR)", "Value"]
+
+    try:
+        # Try to open the workbook, create if it doesn't exist
+        wb = openpyxl.load_workbook(file_name)
+    except FileNotFoundError:
+        wb = openpyxl.Workbook()
+
+    # Check if worksheet exists, else create it
+    if "Warm_History" in wb.sheetnames:
+        ws = wb["Warm_History"]
+    else:
+        ws = wb.create_sheet("Warm_History")
+
+        # Add column headers
+        for col_index, col_name in enumerate(columns, start=1):
+            ws.cell(row=1, column=col_index, value=col_name)
+
+        # Set column width to 15
+        for col_index in range(1, len(columns) + 1):
+            ws.column_dimensions[get_column_letter(col_index)].width = 15
+
+    # Find the latest filled row
+    latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=1)
+
+
+    def clean_numeric(value):
+        """Removes currency symbols and converts to float"""
+        if isinstance(value, str):
+            return float(value.replace("€", "").replace(",", ""))
+        return float(value)
+
+
+    # Write data in the next available row
+    next_row = latest_row + 1
+
+    # Write values to the worksheet
+    ws.cell(row=next_row, column=1, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))  # Date & Time
+    ws.cell(row=next_row, column=2, value=coin)  # Coin Abbr
+    ws.cell(row=next_row, column=3, value=clean_numeric(amount)) # Amount Coin
+    ws.cell(row=next_row, column=4, value=clean_numeric(rate))  # Current rate
+    ws.cell(row=next_row, column=5, value=clean_numeric(value))  # Total Assets
+
+
+
+
+
+    # Save the workbook
+    wb.save(file_name)
+
+    print(f"Data written to '{file_name}' in worksheet 'Warm_History' at row {next_row}")
+
+
+# GLOBAL VARIABLES (declared but initially set to None or default values)
+# These are the variables that need to be accessible and modified by multiple functions
+# within your application, particularly the screen-specific ones.
+# They are set to None here so Python knows they're meant to be global,
+# but their actual initialization happens inside show_total_assets.
+is_tracker_active = False
+updater_job_total = None
+status_label_total = None
+btc_label = None
+back_button = None
+
+
+# Other globals needed for calculations that might be updated elsewhere
+total_stocks = 0.0
+T_EUR_I = 0.0
+T_EUR_O = 0.0
+T_INVST = 0.0
+T_PL = 0.0
+pl_percentage = 0.0
+
+# Tkinter StringVars for updating labels - also declared globally
+warm_value_var = None
+cold_value_var = None
+total_assets_value_var = None
+total_perc_var = None
+total_crypto_text_var = None
+total_pl_var = None
 
 def show_total_assets(root, main_widgets):
     global balances, is_tracker_active
     global warm_value, cold_value, total_assets_value_label
-    global updater_job
+    global updater_job_total, animation_job_id # <--- Added animation_job_id here
     global total_stock_value
-    global status_label
-    global T_EUR_I
-    global T_EUR_O
-    global T_INVST
-    global T_PL
-    global pl_percentage
-    global is_tracker_active, updater_job_total, status_label_total
-    is_tracker_active = False
-    updater_job_total = None
-    status_label_total = None
+    global status_label, btc_label # Make sure btc_label is accessible
+    global T_EUR_I, T_EUR_O, T_INVST, T_PL, pl_percentage,btc_price
+    global warm_value_var, cold_value_var, total_assets_value_var, total_perc_var, total_crypto_text_var, total_pl_var
+
+    root.title("Total Assets - Crypto Price Tracker V1.05")
+    root.iconbitmap("MoneyTot.ico")  # Your .ico file path here
+    root.configure(bg="black")
+
+    is_tracker_active = False # This variable isn't directly used to control the `after` loops
+    for menu in menubar.children.values():  # Iterate through all menus
+        for i in range(menu.index('end') + 1):  # Loop through each item
+            menu.entryconfig(i, state="disabled")  # Disable each item
+
 
     file_path = 'tracker.xlsx'
     amounts = find_eur_and_get_amounts(file_path)
@@ -923,14 +1218,11 @@ def show_total_assets(root, main_widgets):
         T_EUR_O = abs(withdrawal_value)
         T_INVST = T_EUR_I - T_EUR_O
 
-    # Initialize C_counter, C_date, and T_PL here
     C_counter = 0
     C_date = None
-    total_stock_value = 0  # Initialize to a default value
-    T_PL = 0.00  # Initialize T_PL
+    # total_stock_value is already global and initialized, no need to re-initialize here
+    # T_PL is already global and initialized, no need to re-initialize here
 
-    # Check if user has filled in new stocks value otherwise get the latest
-    # Also Check if a CSV has been processed
     if total_stocks == 0:
         try:
             wb = openpyxl.load_workbook('tracker.xlsx')
@@ -939,28 +1231,29 @@ def show_total_assets(root, main_widgets):
             C_counter = C_counter - 1
             C_date = ws['A' + str(C_counter)].value
             total_stock_value = ws['B' + str(C_counter)].value
-            # ws=wb['Pivot Table Summary']
         except FileNotFoundError:
-            print("assigned total_stock_value is wrong / file not found")
+            print("assigned total_stock_value is wrong / file not found or sheet not found")
+        except KeyError:
+            print("Sheet 'Stocks' or cell 'C1'/'A'/'B' not found in tracker.xlsx")
+        except Exception as e:
+            print(f"An error occurred while reading Excel: {e}")
     else:
         total_stock_value = total_stocks
 
-    # Tkinter Variable for Total Profit/Loss
     total_pl_var = tk.StringVar(root, value="0.00")
 
-    # Initialize global warm_value and cold_value as StringVar as well for updating
-    global warm_value_var, cold_value_var, total_assets_value_var, total_perc_var, total_crypto_text_var
     warm_value_var = tk.StringVar(root, value="0.00")
     cold_value_var = tk.StringVar(root, value="0.00")
     total_assets_value_var = tk.StringVar(root, value="0.00")
     total_perc_var = tk.StringVar(root, value="0.00")
-    total_crypto_text = tk.StringVar(root, value="0.0)")
+    total_crypto_text_var = tk.StringVar(root, value="0.0)") # Renamed for consistency
 
     def update_assets():
-        global warm_value, cold_value, total_assets_value_label, updater_job, T_PL
-        global warm_value_var, cold_value_var, total_assets_value_var, pl_percentage, total_perc_var# Access the StringVars
+        global warm_value_var, cold_value_var, total_assets_value_var, pl_percentage, total_perc_var, total_pl_var
+        global updater_job_total # Ensure we access the global one to reschedule
+        global T_PL, T_INVST, total_stock_value
+        global status_label, btc_label # Need to access these to update them
 
-        # Get the balances from warm and cold storage
         warm_balances = get_warm_exchange_balance()
         cold_balances = get_cold_storage_balance()
 
@@ -969,7 +1262,6 @@ def show_total_assets(root, main_widgets):
         for coin in all_coins:
             prices[coin] = get_crypto_ticker(coin)
 
-        # Handle warm storage balance, including EUR explicitly
         total_warm_value = 0
         if warm_balances:
             total_warm_value = sum(
@@ -979,9 +1271,8 @@ def show_total_assets(root, main_widgets):
                 for coin, balance in warm_balances.items()
                 if (prices.get(coin) and prices.get(coin).get('eur_rate')) or coin == 'EUR'
             )
-            warm_value_var.set(f"€{total_warm_value:.2f}")  # Update StringVar
+            warm_value_var.set(f"€{total_warm_value:.2f}")
 
-        # Calculate cold storage value, including EUR explicitly
         total_cold_value = 0
         if cold_balances:
             total_cold_value = sum(
@@ -991,225 +1282,267 @@ def show_total_assets(root, main_widgets):
                 for coin, amount in cold_balances.items()
                 if (prices.get(coin) and prices.get(coin).get('eur_rate')) or coin == 'EUR'
             )
-            cold_value_var.set(f"€{total_cold_value:.2f}")  # Update StringVar
-            T_PL = (total_cold_value + total_warm_value)- T_INVST  # Calculate T_PL here
-            pl_percentage = ((T_PL / T_INVST) * 100) - 100
+            cold_value_var.set(f"€{total_cold_value:.2f}")
 
-            total_pl_var.set(f"€{T_PL:.2f}")  # Update T_PL StringVar
-
-            total_perc_var.set(f"{pl_percentage:.2f} %")
-            percentage_value = total_perc_var.get()
-            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
-
-
-        elif warm_value:  # If only warm balance exists
-            T_PL = total_warm_value=T_INVST
-            total_pl_var.set(f"€{T_PL:.2f}")
-
-            total_perc_var.set(f"{pl_percentage:.2f} %")
-            percentage_value = total_perc_var.get()
-            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
-
-
-
+        # Calculate T_PL after both warm and cold values are determined
+        T_PL = (total_cold_value + total_warm_value) - T_INVST
+        if T_INVST != 0:
+            pl_percentage = (((T_PL / T_INVST) * 100) - 100)
         else:
-            T_PL = 0.00
-            total_pl_var.set(f"€{T_PL:.2f}")
-            #total_perc_var.set(f"{pl_percentage} %")
-            total_perc_var.set(f"{pl_percentage:.2f} %")
-            percentage_value = total_perc_var.get()
-            total_crypto_text.set(f"Current Crypto Profit/Loss: ({percentage_value})")
+            pl_percentage = 0.00 # Avoid division by zero
 
-        # Total assets = warm storage + cold storage + stocks + EUR
+        total_pl_var.set(f"€{T_PL:.2f}")
+        total_perc_var.set(f"{pl_percentage:.2f} %")
+        total_crypto_text_var.set(f"Current Crypto Profit/Loss: ({total_perc_var.get()})")
+
         total_assets_value = total_warm_value + total_cold_value + total_stock_value
-        total_assets_value_var.set(f"€{total_assets_value:.2f}")  # Update StringVar
+        total_assets_value_var.set(f"€{total_assets_value:.2f}")
 
-        # ✨ Animation Part (Symbol Rotating)
-        if status_label and status_label.winfo_exists():  # Ensure status_label exists
-            symbols = ["🔄", "🔃"]
-            frame_interval = 300  # 300 ms per frame
-            total_animation_time = 4000  # 2 seconds total
-
-            def animate(frame_idx=0, elapsed=0):
-                if elapsed < total_animation_time:
-                    if status_label is not None and status_label.winfo_exists():
-                        status_label.config(text=f"{symbols[frame_idx % len(symbols)]}", fg="cyan")
-                    root.after(frame_interval, animate, frame_idx + 1, elapsed + frame_interval)
-                else:
-                    if status_label is not None and status_label.winfo_exists():
-                        status_label.config(text="✅", fg="lightgreen")
-
-            animate()
-
-        # Schedule next update and store job ID
+        # Re-schedule the next asset update
         updater_job_total = root.after(10000, update_assets)
 
-    def back_to_main():
-        global is_tracker_active, current_screen, updater_job_total, status_label, T_PL
+        # Call animate_status after update_assets has run once
+        animate_status()
 
-        # Stop and cancel ongoing animation/updater job
-        if updater_job_total is not None:
+
+    def animate_status(frame_idx=0, elapsed=0):
+        global animation_job_id, status_label, btc_label # Access global for cancellation
+        symbols = ["🔄", "🔃"]
+        frame_interval = 300
+        total_animation_time = 3000
+
+        if status_label is None or not status_label.winfo_exists():
+            # If the label doesn't exist, stop trying to animate
+            print("Status label does not exist, stopping animation.")
+            return
+
+        if elapsed < total_animation_time:
+            # Clear btc_label during animation, or update it if needed
+            if btc_label and btc_label.winfo_exists():
+                 btc_label.config(text="") # Clear it with spaces
+            status_label.config(text=f"{symbols[frame_idx % len(symbols)]}", fg="cyan")
+            # Store the job ID so it can be cancelled
+            animation_job_id = root.after(frame_interval, animate_status, frame_idx + 1, elapsed + frame_interval)
+        else:
+            if status_label and status_label.winfo_exists():
+                btc_val = get_coin_exchange_ticker('BTC-EUR')
+                btc_price = btc_val["price"]
+                status_label.config(text="✅", fg="lightgreen")
+                if btc_label and btc_label.winfo_exists():
+                    eur_usd_rate = scrape_eur_usd()
+
+                    try:
+                        btc_price_usd = float(btc_price) * eur_usd_rate
+                        formatted_price = str(round(btc_price_usd))
+
+                    except ValueError:
+                        print("Error: btc_price is not a valid number!")
+
+                    btc_label.config(text=" Current Bitcoin Price: € " + btc_price + " / $ " + formatted_price, fg="white")
+            animation_job_id = None # Animation finished, clear the job ID
+
+
+    def back_to_main():
+        global btc_price
+        btc_val=get_coin_exchange_ticker('BTC-EUR')
+        btc_price=btc_val["price"]
+        # Example usage:
+        write_totals(warm_value_var.get(), cold_value_var.get(), total_stock_value,
+                    total_assets_value_var.get(),T_EUR_I, T_EUR_O, T_INVST, total_pl_var.get(), pl_percentage,
+                    btc_price)
+        root.title("Main - Crypto Price Tracker V1.05")
+        root.iconbitmap("MoB.ico")  # Your .ico file path here
+        root.configure(bg="black")
+
+        global is_tracker_active, updater_job_total, animation_job_id
+        is_tracker_active = True # Set to true if returning to main, assuming main is 'active'
+        for menu in menubar.children.values():
+            for i in range(menu.index('end') + 1):
+                menu.entryconfig(i, state="normal")
+
+
+        # Cancel the asset update job
+        if updater_job_total:
             root.after_cancel(updater_job_total)
             updater_job_total = None
+            print("Cancelled updater_job_total")
 
-        # Destroy all non-menu widgets
+        # Cancel the animation job
+        if animation_job_id:
+            root.after_cancel(animation_job_id)
+            animation_job_id = None
+            print("Cancelled animation_job_id")
+
+        # Destroy all widgets for the current screen
         for widget in root.winfo_children():
             if not isinstance(widget, tk.Menu):
                 widget.destroy()
 
-        # Set status_label to None after destroying the widget
-        if status_label:
-            status_label.destroy()
-            status_label = None
+        show_main_screen(root) # Call your main screen function
 
-        # Reset tracker state and show the main screen
-        is_tracker_active = True
-        current_screen = "main"
-        show_main_screen(root)
 
-    # Clear previous widgets
-    for widget in main_widgets.values():
-        if isinstance(widget, tk.Widget):  # Check if it's a Tkinter widget
-            try:
-                widget.pack_forget()
-            except:
-                pass # Some widgets might not be packed
-            try:
-                widget.place_forget()
-            except:
-                pass # Some widgets might not be placed
-
+    # --- Widget Creation ---
+    # Destroy all non-menu widgets from previous screen
     for widget in root.winfo_children():
-        if widget not in main_widgets.values() and not isinstance(widget, tk.Menu):
+        if not isinstance(widget, tk.Menu):
+            widget.pack_forget()
+            widget.place_forget()
             widget.destroy()
+
+    # Reset status_label and btc_label references after destroying
+    global status_label, btc_label
+    status_label = None
+    btc_label = None
 
     root.geometry("700x700")
     root.configure(bg="black")
-    #print(T_PL)  # This will likely be the initial global value
-    #print('main')
 
-    # Title
     title_label = tk.Label(root, text="Total Assets Overview", font=("Helvetica", 20, "bold"), fg="white", bg="black")
     title_label.pack(pady=10)
 
-    # Warm Storage
+    tot_frame = tk.Frame(root, bg="black")
+    tot_frame.pack(pady=5, fill="x")
+    tot_label = tk.Label(tot_frame, text="Total Assets", font=("Helvetica", 14, "underline"), fg="lightgray", bg="black", anchor="w")
+    tot_label.pack(side="left", padx=(20, 0))
+
     warm_frame = tk.Frame(root, bg="black")
     warm_frame.pack(pady=5, fill="x")
     warm_label = tk.Label(warm_frame, text="Value Warm Storage:", font=("Helvetica", 14), fg="Orange", bg="black", anchor="w")
     warm_label.pack(side="left", padx=(20, 0))
-    warm_value = tk.Label(warm_frame, textvariable=warm_value_var, font=("Helvetica", 14), fg="Orange", bg="black", anchor="e")  # Use StringVar
+    warm_value = tk.Label(warm_frame, textvariable=warm_value_var, font=("Helvetica", 14), fg="Orange", bg="black", anchor="e")
     warm_value.pack(side="right", padx=(0, 20))
 
-    # Cold Storage
     cold_frame = tk.Frame(root, bg="black")
     cold_frame.pack(pady=5, fill="x")
     cold_label = tk.Label(cold_frame, text="Value Cold Storage:", font=("Helvetica", 14), fg="lightblue", bg="black", anchor="w")
     cold_label.pack(side="left", padx=(20, 0))
-    cold_value = tk.Label(cold_frame, textvariable=cold_value_var, font=("Helvetica", 14), fg="Lightblue", bg="black", anchor="e")  # Use StringVar
+    cold_value = tk.Label(cold_frame, textvariable=cold_value_var, font=("Helvetica", 14), fg="Lightblue", bg="black", anchor="e")
     cold_value.pack(side="right", padx=(0, 20))
 
-    # Stocks
     stock_frame = tk.Frame(root, bg="black")
     stock_frame.pack(pady=5, fill="x")
     if C_date is not None:
-        stock_label = tk.Label(stock_frame, text="Value Stocks (last known):", font=("Helvetica", 14), fg="Yellow", bg="black", anchor="w")
+        stock_label = tk.Label(stock_frame, text=f"Value Stocks (last known):", font=("Helvetica", 14), fg="Yellow", bg="black", anchor="w")
     else:
         stock_label = tk.Label(stock_frame, text="Value Stocks:", font=("Helvetica", 14), fg="Yellow", bg="black", anchor="w")
     stock_label.pack(side="left", padx=(20, 0))
     stock_value_label_widget = tk.Label(stock_frame, text=f"€{total_stock_value:.2f}", font=("Helvetica", 14), fg="yellow", bg="black", anchor="e")
     stock_value_label_widget.pack(side="right", padx=(0, 20))
 
-    # Seperation line
     sep0_frame = tk.Frame(root, bg="black")
     sep0_frame.pack(pady=5, fill="x")
-    sep0_label = tk.Label(sep0_frame, text="", font=("Helvetica", 14), fg="Yellow", bg="black", anchor="w")
-    sep0_label.pack(side="left", padx=(20, 0))
-    sep0_value_label_widget = tk.Label(sep0_frame, text=f"=============", font=("Helvetica", 14), fg="white", bg="black", anchor="e")
-    sep0_value_label_widget.pack(side="right", padx=(0, 20))
+    separator_width = 140
+    separator_thickness = 2 # Changed to 2 for a thinner line
+    separator_widget = tk.Frame(sep0_frame, height=separator_thickness, width=separator_width, bg="white")
+    separator_widget.pack(side="right", padx=(0, 20))
 
-    # Total Assets
     total_assets_frame = tk.Frame(root, bg="black")
-    total_assets_frame.pack(pady=3, fill="x")
+    total_assets_frame.pack(pady=5, fill="x")
     total_assets_label = tk.Label(total_assets_frame, text="Total Assets Value:", font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="w")
     total_assets_label.pack(side="left", padx=(20, 0))
-    total_assets_value_label = tk.Label(total_assets_frame, textvariable=total_assets_value_var, font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="e")  # Use StringVar
+    total_assets_value_label = tk.Label(total_assets_frame, textvariable=total_assets_value_var, font=("Helvetica", 14, "bold"), fg="white", bg="black", anchor="e")
     total_assets_value_label.pack(side="right", padx=(0, 20))
 
-    # Status Label (Updating Symbol) placed at the bottom-left
-    status_label = tk.Label(root, text="", font=("Helvetica", 12), fg="cyan", bg="black", anchor="sw")  # Set a larger font size
-    status_label.place(x=20, y=root.winfo_height() + 360)  # Position at bottom-left corner
+    # --- STATUS AND BTC LABELS ---
+    # Create these labels BEFORE calling update_assets or animate_status,
+    # as they need to exist for those functions to configure them.
+    status_label = tk.Label(root, text="", font=("Helvetica", 18), fg="cyan", bg="black", anchor="sw")
+    status_label.place(x=20, y=660) # Adjust y position as needed, relative to root size
 
-    sep2_frame = tk.Frame(root, bg="black")
-    sep2_frame.pack(pady=20, fill="x")
-    sep2_label = tk.Label(sep2_frame, text="Crypto Overview", font=("Helvetica", 14, "underline"), fg="lightgray", bg="black", anchor="w")
-    sep2_label.pack(side="left", padx=(20, 0))
-    sep2_value_label_widget = tk.Label(sep2_frame, text=f"         ", font=("Helvetica", 14), fg="lightgray", bg="black", anchor="e")
-    sep2_value_label_widget.pack(side="right", padx=(0, 20))
+    btc_label = tk.Label(root, text="", font=("Helvetica", 12), fg="white", bg="black", anchor="sw")
+    btc_label.place(x=195, y=660) # Adjust y position as needed
 
+    sep_crypto_frame = tk.Frame(root, bg="black")
+    sep_crypto_frame.pack(pady=10, fill="x")
+    sep_crypto_label = tk.Label(sep_crypto_frame, text="", font=("Helvetica", 14, "underline"), fg="lightgray", bg="black", anchor="w")
+    sep_crypto_label.pack(side="left", padx=(20, 0))
 
+    total_crypto_frame_title = tk.Frame(root, bg="black") # Renamed to avoid clash
+    total_crypto_frame_title.pack(pady=5, fill="x")
+    total_crypto_label_title = tk.Label(total_crypto_frame_title, text="Crypto Investment", font=("Helvetica", 14, "underline"), fg="lightgray", bg="black", anchor="w")
+    total_crypto_label_title.pack(side="left", padx=(20, 0))
 
-
-    # Total Investment
     total_invest_frame = tk.Frame(root, bg="black")
     total_invest_frame.pack(pady=5, fill="x")
-    total_invest_label = tk.Label(total_invest_frame, text="Total EUR Crypto in:", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="w")
+    total_invest_label = tk.Label(total_invest_frame, text="EUR Crypto in:", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="w")
     total_invest_label.pack(side="left", padx=(20, 0))
     total_invest_value_label = tk.Label(total_invest_frame, text=f"€{T_EUR_I:.2f}", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="e")
     total_invest_value_label.pack(side="right", padx=(0, 20))
 
-    # Total EUR out
-    total_EUR_out_frame = tk.Frame(root, bg="black")  # Create a new frame
-    total_EUR_out_frame.pack(pady=5, fill="x")      # Pack the new frame
-    total_EUR_out_label = tk.Label(total_EUR_out_frame, text="Total EUR Crypto Out:", font=("Helvetica", 14, "bold"), fg="lightyellow", bg="black", anchor="w")
+    total_EUR_out_frame = tk.Frame(root, bg="black")
+    total_EUR_out_frame.pack(pady=5, fill="x")
+    total_EUR_out_label = tk.Label(total_EUR_out_frame, text="EUR Crypto Out:", font=("Helvetica", 14, "bold"), fg="lightyellow", bg="black", anchor="w")
     total_EUR_out_label.pack(side="left", padx=(20, 0))
     total_EUR_out_value_label = tk.Label(total_EUR_out_frame, text=f"€{T_EUR_O:.2f}", font=("Helvetica", 14, "bold"), fg="lightyellow", bg="black", anchor="e")
     total_EUR_out_value_label.pack(side="right", padx=(0, 20))
 
-    # Total Investment Crypto
-    total_current_frame = tk.Frame(root, bg="black")  # Create a new frame
-    total_current_frame.pack(pady=5, fill="x")      # Pack the new frame
-    total_current_label = tk.Label(total_current_frame, text="Total EUR Crypto Investment:", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="w")
+    total_current_frame = tk.Frame(root, bg="black")
+    total_current_frame.pack(pady=5, fill="x")
+    total_current_label = tk.Label(total_current_frame, text="EUR Crypto Investment:", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="w")
     total_current_label.pack(side="left", padx=(20, 0))
     total_current_value_label = tk.Label(total_current_frame, text=f"€{T_INVST:.2f}", font=("Helvetica", 14, "bold"), fg="lightgray", bg="black", anchor="e")
     total_current_value_label.pack(side="right", padx=(0, 20))
 
-    # Seperation line
-    sep1_frame = tk.Frame(root, bg="black")
-    sep1_frame.pack(pady=5, fill="x")
-    sep1_label = tk.Label(sep1_frame, text="", font=("Helvetica", 14), fg="Yellow", bg="black", anchor="w")
-    sep1_label.pack(side="left", padx=(20, 0))
-    sep1_value_label_widget = tk.Label(sep1_frame, text=f"=============", font=("Helvetica", 14), fg="white", bg="black", anchor="e")
-    sep1_value_label_widget.pack(side="right", padx=(0, 20))
+    sep2_frame = tk.Frame(root, bg="black")
+    sep2_frame.pack(pady=5, fill="x")
+    separator_widget_2 = tk.Frame(sep2_frame, height=separator_thickness, width=separator_width, bg="white")
+    separator_widget_2.pack(side="right", padx=(0, 20))
 
-    # Total Profit/Loss Crypto
-    total_crypto_frame = tk.Frame(root, bg="black")  # Create a new frame
-    total_crypto_frame.pack(pady=5, fill="x")      # Pack the new frame
+    total_crypto_profit_loss_frame = tk.Frame(root, bg="black") # Renamed for clarity
+    total_crypto_profit_loss_frame.pack(pady=5, fill="x")
 
-    total_crypto_label = tk.Label(
-    total_crypto_frame,
-    textvariable=total_crypto_text,  # Use a StringVar to dynamically update the text
-    font=("Helvetica", 14, "bold"),
-    fg="lightgreen",
-    bg="black",
-    anchor="w"
+    total_crypto_label_pl = tk.Label(
+        total_crypto_profit_loss_frame,
+        textvariable=total_crypto_text_var,
+        font=("Helvetica", 14, "bold"),
+        fg="lightgreen",
+        bg="black",
+        anchor="w"
     )
-    total_crypto_label.pack(side="left", padx=(20, 0))
-    total_crypto_value_label = tk.Label(
-    total_crypto_frame,
-    textvariable=total_pl_var,
-    font=("Helvetica", 14, "bold"),
-    fg="lightgreen",
-    bg="black",
-    anchor="e"
-    )  # Use StringVar
-    total_crypto_value_label.pack(side="right", padx=(0, 20))
+    total_crypto_label_pl.pack(side="left", padx=(20, 0))
+    total_crypto_value_label_pl = tk.Label(
+        total_crypto_profit_loss_frame,
+        textvariable=total_pl_var,
+        font=("Helvetica", 14, "bold"),
+        fg="lightgreen",
+        bg="black",
+        anchor="e"
+    )
+    total_crypto_value_label_pl.pack(side="right", padx=(0, 20))
 
     # Back Button
-    back_button = tk.Button(root, text="Back", command=back_to_main, font=("Helvetica", 14), bg="grey", fg="white")
-    back_button.pack(pady=20)
+    try:
+        img = Image.open("back_blue.png")
+        img = img.resize((20, 20))
+        img_tk = ImageTk.PhotoImage(img)
+    except FileNotFoundError:
+        print("back_blue.png not found. Using text button instead.")
+        img_tk = None # No image available
 
-    # Start updating assets (this will schedule the first update)
-    update_assets()
+    # Mouse pointer hover for back_button
+
+
+    back_button = Button(
+        root,
+        image=img_tk,
+        command=back_to_main,
+        bg="grey",
+        activebackground="forestgreen",
+        highlightbackground="white",
+        bd=5,
+        relief="raised",
+        width = 35
+        )
+    back_button.bind("<Enter>", on_hover)
+    back_button.bind("<Leave>", on_leave)
+    back_button.place(x=630, y=660)
+    if img_tk: # Only assign if image was loaded
+        back_button.image = img_tk
+
+
+    # Start the initial update and animation
+    update_assets() # This will call animate_status internally for the first time
+
 
 
 
@@ -1270,6 +1603,7 @@ def call_fear_and_greed():
     root = tk.Tk()
     root.title("Tracker - Crypto Fear & Greed Index")
     #root.geometry("625x400")  # Set the window size
+
     root.geometry("625x400")  # Set the window size
     root.configure(bg="white")  # Set background color
 
@@ -1390,8 +1724,8 @@ def call_mempool_window():
         confirm_close=True
     )
     webview.start()
-    window.destroy()
-    root.destroy()
+    #window.destroy()
+    #root.destroy()
     return window.evaluate_js("document.title")
 
 def call_cte_window():
@@ -1422,6 +1756,8 @@ def get_coin_id(symbol):
         return None
     return None
 
+
+# Get All Time high Value for the coin
 def get_ath(symbol):
     """Fetch ATH prices in both USD and EUR and return as separate values."""
     coin_id = get_coin_id(symbol)
@@ -1614,6 +1950,7 @@ def try_create_and_save(filename):
 
 
 def show_main_screen(root):
+
     global is_tracker_active, after_id, main_widgets
 
     is_tracker_active = True
@@ -1666,9 +2003,25 @@ def show_main_screen(root):
     if eur_usd_rate is not None:
         usd_eur_rate = 1 / eur_usd_rate if eur_usd_rate != 0 else "N/A"
         exchange_rate_text = f"Rate: €{eur_usd_rate:.4f} / ${usd_eur_rate:.4f}"
+        print("Eur rate", eur_usd_rate)
 
     exchange_rate_label = tk.Label(root, text=exchange_rate_text, font=("Helvetica", 10), fg="cyan", bg="black", anchor="se")
-    exchange_rate_label.place(relx=1.0, rely=1.0, anchor="se")
+    exchange_rate_label.place(relx=1.0, rely=1.0, anchor="se", x=-10, y=-10)
+
+    #Extra for Ath
+    ath_label_text = tk.StringVar()
+    ath_label_text.set("Loading ATH...") # Set initial text
+    ath_label = tk.Label(
+        root, # Parent is now root
+        textvariable=ath_label_text,
+        font="Helvetica, 10",
+        fg="cyan",
+        bg="black",
+        anchor="sw"
+    )
+    ath_cache = ath_label
+
+    ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
 
     # Dropdown menu for selecting the cryptocurrency
     coins_dropdown = ttk.Combobox(root, textvariable=selected_coin, values=available_coins, state="readonly")
@@ -1690,7 +2043,10 @@ def show_main_screen(root):
         'footer_text': main_labels['footer_text'],
         'footer_date': main_labels['footer_date'],
         'coins_dropdown': coins_dropdown,
-        'exchange_rate_label': exchange_rate_label
+        'exchange_rate_label': exchange_rate_label,
+        'ath_label' : ath_label,
+        'ath_label_text': ath_label_text, # Add the StringVar here
+        #'ath_label_text': ath_label_text
     }
 
     # Cancel any existing update timers before starting a new one
@@ -1766,11 +2122,12 @@ def main(root=None):
     title_font = ("Helvetica", 22, "bold")
     small_font = ("Helvetica", 10)
 
-    print(f"main() called with root: {root}")
+    #print(f"main() called with root: {root}")
     if root is None:
         try:
             root = tk.Tk()
-            root.title("Crypto Price Tracker V1.0")
+            root.title("Main - Crypto Price Tracker V1.05")
+            root.iconbitmap("MoB.ico")  # Your .ico file path here
             root.configure(bg="black")
             menubar = Menu(root)
             print(root)
@@ -1811,6 +2168,7 @@ def main(root=None):
             menubar.add_cascade(label="Live View", menu=external_menu)
             external_menu.add_command(label="Fear and Greed", command=call_fear_and_greed)
             external_menu.add_command(label="AGGR Live View", command=call_aggr_window)
+
             external_menu.add_command(label="Mempool", command=lambda: call_mempool_window())
             external_menu.add_command(label="CoinTelegraph", command=call_cte_window)
 
@@ -1838,12 +2196,12 @@ def main(root=None):
             print(f"Root config('menu') na creatie: {root.config('menu')}")
 
         except Exception as e:
-            logging.error(f"Fout bij initialiseren root: {e}")
-            print(f"Fout bij initialiseren root: {e}")
+            logging.error(f"Failure initializing root: {e}")
+            print(f"Failure initializing root: {e}")
             return
     else:
-        print(f"Bestaande root ontvangen: {root}, current menu config: {root.config('menu')}")
-        print(f"Widgets in root bij terugkeer: {root.winfo_children()}")
+        print(f"Excisting root accepted: {root}, current menu config: {root.config('menu')}")
+        print(f"Widgets in root by return: {root.winfo_children()}")
 
     selected_coin = tk.StringVar(root)
 
@@ -1895,9 +2253,8 @@ def main(root=None):
             bg="black",
             anchor="sw"
         )
+        ath_cache = ath_label
         ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
-
-        print(" before ",ath_price_eur)
 
 
         eur_usd_rate = scrape_eur_usd()
@@ -1911,6 +2268,10 @@ def main(root=None):
         exchange_rate_label = tk.Label(root, text=exchange_rate_text, font=("Helvetica", 10), fg="cyan", bg="black", anchor="se")
         exchange_rate_label.place(relx=1.0, rely=1.0, anchor="se", x=-10, y=-10)
         ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
+        print("ATH OP SCHERM")
+        print(ath_cache)
+        print(" before ",ath_price_eur)
+
 
 
 
@@ -1919,8 +2280,8 @@ def main(root=None):
         coins_dropdown.pack()
         coins_dropdown.set(available_coins[0])
         coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_widgets))
-        print(selected_coin.get())
-        print(ath_price_eur, ath_price_usd)
+        #print(selected_coin.get())
+        #print(ath_price_eur, ath_price_usd)
         print("3e Coin printed")
 
         global main_widgets

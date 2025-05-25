@@ -16,7 +16,7 @@ from tkinter import filedialog
 from collections import defaultdict
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
-
+global btc_value
 
 # Load warm storage credentials from tracker.xlsx
 try:
@@ -28,6 +28,7 @@ try:
 except (FileNotFoundError, KeyError, Exception) as e:
     print(f"Error opening 'tracker.xlsx': {e}")
     sys.exit()
+
 
 
 # Warm Storage API Functions
@@ -106,8 +107,8 @@ def calculate_buy_stake_sell_data(csv_filepath, real_time_prices):
         'deposited_amount': 0,
         'total_invested': 0  # New field to track investment per coin
     })
-    eur_in = 0.0
-    eur_out = 0.0
+    eur_in_total = 0.0
+    eur_out_total = 0.0
     all_rows = []
 
     try:
@@ -154,9 +155,12 @@ def calculate_buy_stake_sell_data(csv_filepath, real_time_prices):
                 elif tx_type == 'deposit' and currency != 'EUR':
                     data_per_coin[currency]['deposited_amount'] += amount
                 elif currency == 'EUR' and tx_type == 'deposit':
-                    eur_in += amount
+                    eur_in_total += amount
+                    print("Deposit")
+                    print(f"EUR In: {eur_in_total}, EUR Out: {eur_out_total}")
+
                 elif currency == 'EUR' and tx_type == 'withdrawal':
-                    eur_out += abs(amount)
+                    eur_out_total += abs(amount)
 
         result = {}
         for coin, data in sorted(data_per_coin.items()):
@@ -166,7 +170,7 @@ def calculate_buy_stake_sell_data(csv_filepath, real_time_prices):
             deposited = data.get('deposited_amount', 0.0)
             total_invested = data.get('total_invested', 0.0)
 
-            current = (bought + staked + deposited) - sold
+            current = (bought + staked + deposited) - (sold)
             avg_price = round(data['bought_cost'] / bought, 2) if bought > 0 else 0.0
 
             value_now = current * real_time_prices.get(coin, 0)
@@ -182,7 +186,7 @@ def calculate_buy_stake_sell_data(csv_filepath, real_time_prices):
                 'profit_loss': profit_loss
             }
 
-        return result, round(eur_in, 2), round(eur_out, 2), all_rows
+        return result, round(eur_in_total, 2), round(eur_out_total, 2), all_rows
 
     except Exception as e:
         print(f"Error reading CSV: {e}")
@@ -390,6 +394,7 @@ def browse_file():
         create_excel_with_pivots("tracker.xlsx", all_csv_data, relevant_coins)
 
 def exit_program():
+
     root.destroy()
 
 
