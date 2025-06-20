@@ -59,6 +59,7 @@ import matplotlib.colors as mcolors
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg#
 #from calcpiv import load_csv_calculate
 import logging
+from functools import wraps
 #logging.basicConfig(level=logging.DEBUG)
 
 # --- Global Variables (Module Level Initialization) ---
@@ -66,12 +67,13 @@ import logging
 # before any function might try to access them. They are initialized to None
 # or default values. Functions like show_total_assets will then manage them.
 global bg_color, fg_color, fg_cold, fg_cyan, fg_day, fg_ani, darkmod, fg_tot_assets
-global par_refresh_main
+global fg_tot_storage, debugmode
+global par_refresh_main, par_debug_mode
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 CONFIG_FILE = "tracker.cfg"
-
+par_debug_mode = False
 is_tracker_active = False
 darkmod = False
 fg_cold=""
@@ -80,11 +82,13 @@ fg_color=""
 bg_color=""
 fg_day=""
 fg_ani=""
+fg_tot_storage=""
 updater_job_total = None
 status_label_total = None
 status_label_total = None
 btc_label = None
 back_button = None
+current_warm_data = []
 
 # Other globals needed for calculations that might be updated elsewhere
 total_stocks = 0.0
@@ -103,112 +107,27 @@ total_perc_var = None
 total_crypto_text_var = None
 total_pl_var = None
 
-class SimpleMarkdownText(tkscroll.ScrolledText):
-    """
-    Really basic Markdown display. Thanks to Bryan Oakley's RichText:
-    https://stackoverflow.com/a/63105641/79125
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        default_font = tkfont.nametofont(self.cget("font"))
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
+logging.getLogger("root").setLevel(logging.WARNING)
 
-        em = default_font.measure("m")
-        default_size = default_font.cget("size")
-        bold_font = tkfont.Font(**default_font.configure())
-        italic_font = tkfont.Font(**default_font.configure())
+def debug_log(func):
+    # Haal een specifieke logger op voor deze functie in de "debug" namespace
+    log = logging.getLogger(f"debug.{func.__name__}")
+    # Het level wordt al door basicConfig ingesteld, dus dit is niet per se nodig
+    # log.setLevel(logging.DEBUG)
 
-        bold_font.configure(weight="bold")
-        italic_font.configure(slant="italic")
-
-        # Small subset of markdown. Just enough to make text look nice.
-        self.tag_configure("**", font=bold_font)
-        self.tag_configure("*", font=italic_font)
-        self.tag_configure("_", font=italic_font)
-        self.tag_chars = "*_"
-        self.tag_char_re = re.compile(r"[*_]")
-
-        max_heading = 3
-        for i in range(1, max_heading + 1):
-            header_font = tkfont.Font(**default_font.configure())
-            header_font.configure(size=int(default_size * i + 3), weight="bold")
-            self.tag_configure(
-                "#" * (max_heading - i), font=header_font, spacing3=default_size
-            )
-
-        lmargin2 = em + default_font.measure("\u2022 ")
-        self.tag_configure("bullet", lmargin1=em, lmargin2=lmargin2)
-        lmargin2 = em + default_font.measure("1. ")
-        self.tag_configure("numbered", lmargin1=em, lmargin2=lmargin2)
-
-        self.numbered_index = 1
-
-    def insert_bullet(self, position, text):
-        self.insert(position, f"\u2022 {text}", "bullet")
-
-    def insert_numbered(self, position, text):
-        self.insert(position, f"{self.numbered_index}. {text}", "numbered")
-        self.numbered_index += 1
-
-    def insert_markdown(self, mkd_text):
-        """A very basic markdown parser.
-
-        Helpful to easily set formatted text in tk. If you want actual markdown
-        support then use a real parser.
-        """
-        for line in mkd_text.split("\n"):
-            if line == "":
-                # Blank lines reset numbering
-                self.numbered_index = 1
-                self.insert("end", line + "\n")
-
-            elif line.startswith("#"):
-                tag = re.match(r"(#+) (.*)", line)
-                if tag:
-                    line = tag.group(2)
-                    self.insert("end", line + "\n", tag.group(1))
-
-            elif line.startswith("* "):
-                line = line[2:]
-                self.insert_bullet("end", line + "\n")
-
-            elif line.startswith("1. "):
-                line = line[3:] # Corrected index length
-                self.insert_numbered("end", line + "\n")
-
-            elif not self.tag_char_re.search(line):
-                self.insert("end", line + "\n")
-
-            else:
-                tag = None
-                accumulated = []
-                skip_next = False
-                for i, c in enumerate(line):
-                    if skip_next:
-                        skip_next = False
-                        continue
-                    if c in self.tag_chars and (not tag or c == tag[0]):
-                        if tag:
-                            self.insert("end", "".join(accumulated), tag)
-                            accumulated = []
-                            tag = None
-                        else:
-                            self.insert("end", "".join(accumulated))
-                            accumulated = []
-                            tag = c
-                            next_i = i + 1
-                            if len(line) > next_i and line[next_i] == tag:
-                                tag = line[i : next_i + 1]
-                                skip_next = True
-
-                    else:
-                        accumulated.append(c)
-                self.insert("end", "".join(accumulated), tag)
-            # Ensure a newline after each processed line
-            if not line.endswith('\n'):
-                self.insert("end", "\n")
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        log.debug(f"→ {func.__name__} called with args: {args}, kwargs: {kwargs}")
+        result = func(*args, **kwargs)
+        log.debug(f"← {func.__name__} returned: {result}")
+        return result
+    return wrapper
 
 
 
+os.system('cls')
 print('Initializing......')
 stocks=0
 today = date.today()
@@ -225,7 +144,8 @@ except (FileNotFoundError, KeyError, Exception) as e:
 previous_prices = {}
 after_id = None
 selected_coin = None
-available_coins = ["BTC", "ETH", "SOL", "ADA", "POLS"]
+available_coins=[]
+#available_coins = ["BTC", "ETH", "SOL", "ADA", "POLS"]
 #coin_symbols = {"BTC": "₿", "ETH": "Ξ", "SOL": "◎", "ADA": "₳", "POLS": ""}
 coin_symbols = {}
 stop_event = threading.Event()
@@ -239,16 +159,15 @@ main_widgets = {} # Initialise main_widgets as an empty dictionary
 aggr_window_instance = None
 total_stocks = 0
 
-
-
+#@debug_log
 def create_signature(ts, method, endpoint, body=None):
     url_path = '/v2/' + endpoint  # Ensure this is correct
     msg = str(ts) + method + url_path
     if body:
         msg += json.dumps(body)
     signature = hmac.new(WARM_API_SECRET.encode('utf-8'), msg.encode(), hashlib.sha256).hexdigest()
-    #logging.debug(f"SIGNATURE INPUT ({endpoint}): {msg}")
-    #logging.debug(f"GENERATED SIGNATURE ({endpoint}): {signature}")
+    logging.debug(f"SIGNATURE INPUT ({endpoint}): {msg}")
+    logging.debug(f"GENERATED SIGNATURE ({endpoint}): {signature}")
     return signature
 
 def warm_exchange_req(method, endpoint, params=None, retries=3):
@@ -265,7 +184,7 @@ def warm_exchange_req(method, endpoint, params=None, retries=3):
         #logging.debug(f"Request Headers: {headers}")
         #logging.debug(f"Request Params: {params}")
         resp = requests.request(method, full_url, headers=headers, params=params)
-        #logging.debug(f"Response Headers: {resp.headers}")
+        #logging.debug(f"warm_exchange_req * successfull, Response Headers: {resp.headers}")
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.RequestException as e:
@@ -396,13 +315,13 @@ def load_app_settings():
     return app_settings
 
 
-
+@debug_log
 def update_gui(root, labels):
     global previous_prices, selected_coin, balances, is_tracker_active, after_id
     global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol, ath_cache
 
-
-
+    print("Dev Update_gui called")
+    print("is_tracker_active: ", is_tracker_active)
     # Stop if event is set, tracker is inactive, or root does not exist anymore
     # Should be inactive or False by Warm Storage, Cold Storage and Total Assets
     if stop_event.is_set() or not is_tracker_active or not root.winfo_exists():
@@ -468,8 +387,9 @@ def update_gui(root, labels):
         previous_prices[crypto] = {'eur': eur_price, 'usd': usd_price}
 
         # Update GUI elements safely (only if they still exist)
+
         icon=get_coin_icon_main(crypto)
-        print(crypto)
+        #print(crypto)
 
         if 'header_white' in labels and tk.Frame.winfo_exists(labels['header_white'].master):
             labels['header_white'].config(text="Current", font=("Helvetica", 22, "bold"))
@@ -478,8 +398,8 @@ def update_gui(root, labels):
         if 'header_orange' in labels and tk.Frame.winfo_exists(labels['header_orange'].master):
             labels['header_orange'].config(text=f"{crypto} ", font=("Helvetica", 22, "bold"))
 
-            # Voeg de afbeelding toe aan het label
-            if icon:  # Zorg ervoor dat de afbeelding niet None is
+            # Get the ICON and set the label
+            if icon:  # Make sure the ICON is not none
                 labels['header_orange'].config(image=icon, compound="right")
                 labels['header_orange'].image = icon  # Voorkom dat de afbeelding verdwijnt door garbage collection
 
@@ -547,7 +467,7 @@ def update_gui(root, labels):
 
 
 
-
+@debug_log
 def get_cold_storage_balance():
     cold_storage = {}
     try:
@@ -598,10 +518,6 @@ def add_stocks():
     # highlight_menu("Config", "Add Stocks") # highlight_menu is not defined
     pass
 
-def FG():
-    print("Fear and greed")
-    # highlight_menu("FG", "Fear and greed") # highlight_menu is not defined
-    pass
 
 #def AGGR():
     print("AGGR")
@@ -615,7 +531,7 @@ def about():
     # highlight_menu("About", "About") # highlight_menu is not defined
     pass
 
-
+@debug_log
 def show_warm_storage(root):
     global is_tracker_active, updater_job_warm, status_label_warm, btc_label, back_button
     root.title("Warm Storage - Crypto Price Tracker V1.1")
@@ -635,8 +551,7 @@ def show_warm_storage(root):
             menu.entryconfig(i, state="disabled")  # Disablecall each item
 
     def update_warm_storage():
-
-        global updater_job_warm, status_label_warm, btc_label, back_button, fg_ani
+        global updater_job_warm, status_label_warm, btc_label, back_button, fg_ani, current_warm_data
 
         balances = get_warm_exchange_balance()
         prices = {}
@@ -649,7 +564,7 @@ def show_warm_storage(root):
                     ticker = get_crypto_ticker(coin)
                     prices[coin] = ticker if ticker and 'eur_rate' in ticker else {"eur_rate": None}
             except Exception as e:
-                logging.error(f"Fout bij ophalen prijs voor {coin}: {e}")
+                logging.error(f"Error fetching price for {coin}: {e}")
                 prices[coin] = {"eur_rate": None}
 
         # Clean screen, preserve essential widgets
@@ -674,6 +589,8 @@ def show_warm_storage(root):
             amount_width = len("Amount Coins")
             value_width = len("Value (EUR)")
 
+            # Clear previous data and prepare new data for spreadsheet
+            current_warm_data = []
 
             for coin, balance_data in sorted_balances:
                 available = balance_data['available']
@@ -683,7 +600,16 @@ def show_warm_storage(root):
                 eur_value = total_amount * eur_price if eur_price is not None else None
 
                 if eur_value is not None and eur_value >= 0.1:
-                    displayed_coins.append(( coin, balance_data, eur_price, eur_value))
+                    displayed_coins.append((coin, balance_data, eur_price, eur_value))
+
+                    # Store data for spreadsheet export
+                    current_warm_data.append({
+                        'coin': coin,
+                        'amount': total_amount,
+                        'rate': eur_price,
+                        'value': eur_value
+                    })
+
                     symbol_width = 50
                     coin_width = max(coin_width, len(coin))
                     price_width = max(price_width, len(f"{eur_price:.2f}" if eur_price else "N/A"))
@@ -708,7 +634,7 @@ def show_warm_storage(root):
                 icon = get_coin_icon(coin)
                 row_frame = tk.Frame(root, bg=bg_color)
                 row_frame.pack()
-                # Label met coin-naam + icoon
+                # Label with coin-name + icon
                 coin_label = tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="w")
 
                 #ICON_COIN_WARM
@@ -719,7 +645,6 @@ def show_warm_storage(root):
                     coin_label.image = icon  # Make sure the Icon stays and not get lost garbage collection
 
                 coin_label.pack(side="left", padx=(0,0))
-
 
                 tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="e").pack(side="left", padx=(20,0))
 
@@ -732,7 +657,6 @@ def show_warm_storage(root):
                 tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A",
                          font=("Helvetica", 12), fg=fg_color if eur_value else "red", bg=bg_color,
                          width=value_width + 1, anchor="e").pack(side="left", padx=(20, 0))
-
 
             # Totals
             total_eur_value = sum((item[1]['available'] + item[1]['in_order']) * item[2]
@@ -762,7 +686,7 @@ def show_warm_storage(root):
             total_value_container,
             text=f"€{total_eur_value:.2f}",
             font=("Helvetica", 12, "bold"),
-            fg="orange",
+            fg=fg_tot_storage,
             bg=bg_color  # Match the background of its container
             )
             # Pack the label to the right within its container ('total_value_container'),
@@ -854,6 +778,20 @@ def show_warm_storage(root):
         animate()
 
     def back_to_main_warm():
+        global is_tracker_active, updater_job_warm, current_warm_data
+        #print("Status of write_warm", par_write_warm)
+        # Write current warm storage data to spreadsheet before going back
+        try:
+            if current_warm_data and par_write_warm:
+                write_horizontal(current_warm_data,"warm")
+                print(f"Exported {len(current_warm_data)} coins to spreadsheet")
+            else:
+                print("No warm storage data to export")
+        except Exception as e:
+            print(f"Error writing to spreadsheet: {e}")
+            logging.error(f"Spreadsheet export failed: {e}")
+
+
         root.title("Main - Crypto Price Tracker V1.1")
         icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
         root.iconbitmap(icon_path)  # Your .ico file path here
@@ -888,10 +826,11 @@ def show_warm_storage(root):
 
 
 
-
+@debug_log
 def show_cold_storage(root, main_widgets):
     # Globals to manage tracker status, update job, and status label
     global is_tracker_active, updater_job_cold, status_label_cold, btc_label, back_button
+
     root.title("Cold Storaqge - Crypto Price Tracker V1.1")
     icon_path = os.path.join(os.getcwd(), "crypto", f"ThermoCold.ico")
     print(icon_path)
@@ -909,6 +848,7 @@ def show_cold_storage(root, main_widgets):
     def update_cold_storage():
         """Refresh cold storage display and animate status"""
         global updater_job_cold, status_label_cold, btc_label, back_button, fg_ani
+        global current_cold_data
 
         # Get updated cold storage balances and latest prices
         cold_storage_balances = get_cold_storage_balance()
@@ -924,6 +864,8 @@ def show_cold_storage(root, main_widgets):
         # Set window properties
         root.geometry("700x700")
         root.configure(bg=bg_color)
+
+        current_cold_data = []
 
         # Display Cold Storage header
         cold_storage_label = tk.Label(root, text="Cold Storage Assets", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
@@ -954,9 +896,20 @@ def show_cold_storage(root, main_widgets):
             amount_width = len("Amount Coins")
             value_width = len("Value (EUR)")
 
+
+
+
             for coin, amount in sorted_balances:
                 eur_price = prices.get(coin, {}).get('eur_rate')
                 eur_value = amount * eur_price if eur_price is not None else None
+
+                # Store data for spreadsheet export
+                current_cold_data.append({
+                    'coin': coin,
+                    'amount': amount,
+                    'rate': eur_price,
+                    'value': eur_value
+                    })
 
                 coin_width = max(coin_width, len(coin))
                 price_width = max(price_width, len(f"{eur_price:.2f}" if eur_price is not None else "N/A"))
@@ -1021,7 +974,7 @@ def show_cold_storage(root, main_widgets):
             total_value_container,
             text=f"€{total_cold_value:.2f}",
             font=("Helvetica", 12, "bold"),
-            fg="orange",
+            fg=fg_tot_storage,
             bg=bg_color  # Match the background of its container
             )
             # Pack the label to the right within its container ('total_value_container'),
@@ -1103,8 +1056,23 @@ def show_cold_storage(root, main_widgets):
 
 
     def back_to_main_cold():
+        global is_tracker_active, updater_job_warm, current_cold_data
+        # print("Status of write_cold", par_write_cold)
+        # Write current cold storage data to spreadsheet before going back
+        try:
+            if current_cold_data and par_write_cold:
+                write_horizontal(current_cold_data,"cold")
+                print(f"Exported {len(current_cold_data)} coins to spreadsheet")
+            else:
+                print("No cold storage data to export")
+        except Exception as e:
+            print(f"Error writing to spreadsheet: {e}")
+            logging.error(f"Spreadsheet export failed: {e}")
+
+
         root.title("Main - Crypto Price Tracker V1.1")
         icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
+
         root.iconbitmap(icon_path)  # Your .ico file path here
         root.configure(bg=bg_color)
         global is_tracker_active, updater_job_cold
@@ -1134,8 +1102,9 @@ def show_cold_storage(root, main_widgets):
     update_cold_storage()
 
 
-
+@debug_log
 def set_total_stocks(parent):
+
 
     filename='tracker.xlsx'
 
@@ -1162,7 +1131,7 @@ def set_total_stocks(parent):
             ws['B' + str(next_row)] = total_stocks
 
             wb.save(filename)
-            print("Data written to Excel.")
+            #print(f"Data written to Excel.")
             # --- End Excel Writing Logic ---
             top.destroy()
         except ValueError:
@@ -1242,6 +1211,7 @@ def on_leave(event):
     event.widget.config(bg="grey")
 
 # Writes values Total Assets screen to tracker.xls sheet=
+@debug_log
 def write_totals(total_warm_value, total_cold_value, total_stocks_value, total_assets_value,
                  amount_deposit, amount_withdraw, t_invest, T_PL, pl_percentage, btc_price):
 
@@ -1309,16 +1279,21 @@ def write_totals(total_warm_value, total_cold_value, total_stocks_value, total_a
     # Save the workbook
     wb.save(file_name)
 
-    print(f"Data written to '{file_name}' in worksheet 'Assets_History' at row {next_row}")
+    #print(f"Data written to '{file_name}' in worksheet 'Assets_History' at row {next_row}")
 
 # Writes values Warm Assets screen to tracker.xls sheet
-def write_warm(coin, amount, rate, value):
 
 
+@debug_log
+def write_horizontal(coins_data, storage):
+    """
+    Writes warm or cold storage data horizontally across columns
 
+    Args:
+        coins_data: List of dictionaries with keys: 'coin', 'amount', 'rate', 'value'
+                   Example: [{'coin': 'BTC', 'amount': 1.5, 'rate': 45000, 'value': 67500}, ...]
+    """
     file_name = "tracker.xlsx"
-    """Opens or creates an Excel file and writes totals on the latest row + 1"""
-    columns = ["Date", "Coin", "Amount", "Rate (EUR)", "Value"]
 
     try:
         # Try to open the workbook, create if it doesn't exist
@@ -1326,49 +1301,154 @@ def write_warm(coin, amount, rate, value):
     except FileNotFoundError:
         wb = openpyxl.Workbook()
 
-    # Check if worksheet exists, else create it
-    if "Warm_History" in wb.sheetnames:
-        ws = wb["Warm_History"]
-    else:
-        ws = wb.create_sheet("Warm_History")
+    # print (storage)
+    if storage == "warm" :
+        	# Check if worksheet exists, else create it
+        if "Warm_History" in wb.sheetnames:
+                ws = wb["Warm_History"]
+        else:
+                ws = wb.create_sheet("Warm_History")
 
-        # Add column headers
-        for col_index, col_name in enumerate(columns, start=1):
-            ws.cell(row=1, column=col_index, value=col_name)
+    if storage == "cold" :
+        # Check if worksheet exists, else create it
+        if "Cold_History" in wb.sheetnames:
+                ws = wb["Cold_History"]
+        else:
+                ws = wb.create_sheet("Cold_History")
 
-        # Set column width to 15
-        for col_index in range(1, len(columns) + 1):
-            ws.column_dimensions[get_column_letter(col_index)].width = 15
+        # Remove default sheet if it exists and is empty
+    if "Sheet" in wb.sheetnames:
+            wb.remove(wb["Sheet"])
 
-    # Find the latest filled row
-    latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=1)
-
+    # Find the next available row (first completely empty row)
+    next_row = 1
+    while any(ws.cell(row=next_row, column=col).value for col in range(1, 20)):  # Check first 20 columns
+        next_row += 1
 
     def clean_numeric(value):
         """Removes currency symbols and converts to float"""
         if isinstance(value, str):
-            return float(value.replace("€", "").replace(",", ""))
+            return float(value.replace("€", "").replace(",", "").replace("$", ""))
         return float(value)
 
+    # Write the layout as specified
+    # First row: DATE in column 1, COINS in column 3
+    ws.cell(row=next_row, column=1, value="DATE")
+    ws.cell(row=next_row, column=3, value="COINS")
 
-    # Write data in the next available row
-    next_row = latest_row + 1
+    # Second row: Current date in column 1, then coins starting from column 3
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ws.cell(row=next_row + 1, column=1, value=current_date)
 
-    # Write values to the worksheet
-    ws.cell(row=next_row, column=1, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))  # Date & Time
-    ws.cell(row=next_row, column=2, value=coin)  # Coin Abbr
-    ws.cell(row=next_row, column=3, value=clean_numeric(amount)) # Amount Coin
-    ws.cell(row=next_row, column=4, value=clean_numeric(rate))  # Current rate
-    ws.cell(row=next_row, column=5, value=clean_numeric(value))  # Total Assets
+    # Write coin names starting from column 3
+    for i, coin_data in enumerate(coins_data):
+        ws.cell(row=next_row + 1, column=3 + i, value=coin_data['coin'])
 
+    # Third row: "Rate" in column 2
+    ws.cell(row=next_row + 2, column=2, value="Rate")
 
+    # Write rates for each coin
+    for i, coin_data in enumerate(coins_data):
+        ws.cell(row=next_row + 2, column=3 + i, value=clean_numeric(coin_data['rate']))
 
+    # Fourth row: "Amount" in column 2
+    ws.cell(row=next_row + 3, column=2, value="Amount")
 
+    # Write amounts for each coin
+    for i, coin_data in enumerate(coins_data):
+        ws.cell(row=next_row + 3, column=3 + i, value=clean_numeric(coin_data['amount']))
+
+    # Fifth row: "Value" in column 2
+    ws.cell(row=next_row + 4, column=2, value="Value")
+
+    # Write values for each coin
+    for i, coin_data in enumerate(coins_data):
+        ws.cell(row=next_row + 4, column=3 + i, value=clean_numeric(coin_data['value']))
+
+    # Set column widths for better readability
+    ws.column_dimensions['A'].width = 20  # Date column
+    ws.column_dimensions['B'].width = 15  # Labels column
+    for i in range(len(coins_data)):
+        col_letter = get_column_letter(3 + i)
+        ws.column_dimensions[col_letter].width = 15
 
     # Save the workbook
     wb.save(file_name)
+    #print(f"Data written to '{file_name}' in worksheet '{ws}' starting at row {next_row}")
+    #print(f"Layout: {len(coins_data)} coins written horizontally")
 
-    print(f"Data written to '{file_name}' in worksheet 'Warm_History' at row {next_row}")
+# Example usage function (for testing)
+def example_usage():
+    """Example of how to use the function"""
+    sample_data = [
+        {'coin': 'BTC', 'amount': 1.5, 'rate': 45000.50, 'value': 67500.75},
+        {'coin': 'ETH', 'amount': 10.2, 'rate': 3200.25, 'value': 32642.55},
+        {'coin': 'ADA', 'amount': 1000, 'rate': 0.45, 'value': 450.00}
+    ]
+    write_horizontal(sample_data, storage)
+
+# Alternative: If you want to keep your original function signature but call it multiple times
+def write_single_entry(coin, amount, rate, value):
+    """
+    Modified version of the original function that works with the horizontal layout
+    This version adds a single coin to the existing horizontal layout
+    """
+    file_name = "tracker.xlsx"
+
+    try:
+        wb = openpyxl.load_workbook(file_name)
+    except FileNotFoundError:
+        wb = openpyxl.Workbook()
+
+    if "Warm_History" in wb.sheetnames:
+        ws = wb["Warm_History"]
+    else:
+        ws = wb.create_sheet("Warm_History")
+        if "Sheet" in wb.sheetnames:
+            wb.remove(wb["Sheet"])
+
+    def clean_numeric(value):
+        if isinstance(value, str):
+            return float(value.replace("€", "").replace(",", "").replace("$", ""))
+        return float(value)
+
+    # Find the current date row (look for DATE in column 1)
+    date_row = None
+    for row in range(1, ws.max_row + 1):
+        if ws.cell(row=row, column=1).value == "DATE":
+            date_row = row
+            break
+
+    if date_row is None:
+        # First entry - create the structure
+        date_row = 1
+        ws.cell(row=date_row, column=1, value="DATE")
+        ws.cell(row=date_row, column=3, value="COINS")
+        ws.cell(row=date_row + 1, column=1, value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        ws.cell(row=date_row + 2, column=2, value="Rate")
+        ws.cell(row=date_row + 3, column=2, value="Amount")
+        ws.cell(row=date_row + 4, column=2, value="Value")
+
+    # Find the next available column (first empty column starting from column 3)
+    next_col = 3
+    while ws.cell(row=date_row + 1, column=next_col).value is not None:
+        next_col += 1
+
+    # Write the coin data
+    ws.cell(row=date_row + 1, column=next_col, value=coin)  # Coin name
+    ws.cell(row=date_row + 2, column=next_col, value=clean_numeric(rate))  # Rate
+    ws.cell(row=date_row + 3, column=next_col, value=clean_numeric(amount))  # Amount
+    ws.cell(row=date_row + 4, column=next_col, value=clean_numeric(value))  # Value
+
+    # Set column width
+    col_letter = get_column_letter(next_col)
+    ws.column_dimensions[col_letter].width = 15
+
+    wb.save(file_name)
+    print(f"Coin '{coin}' added to '{file_name}' in column {next_col}")
+
+
+
 
 
 # GLOBAL VARIABLES (declared but initially set to None or default values)
@@ -1398,7 +1478,7 @@ total_assets_value_var = None
 total_perc_var = None
 total_crypto_text_var = None
 total_pl_var = None
-
+@debug_log
 def show_total_assets(root, main_widgets):
     global balances, is_tracker_active
     global warm_value, cold_value, total_assets_value_label
@@ -1768,171 +1848,11 @@ def show_total_assets(root, main_widgets):
 
 
 # Function to fetch Fear & Greed Index data
-def get_fng_data():
-    url = "https://api.alternative.me/fng/?limit=30"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise exception for bad status codes
-        data = response.json()  # Parse the JSON response
-        values = [int(item['value']) for item in data['data']]  # Extract the 'value' field from the data
-        return values  # Return the Fear & Greed values (current, yesterday, last week, last month)
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data: {e}")
-        return [50, 50, 50, 50]  # Default values in case of an error
 
-# Function to determine the color based on the value
-def get_color_for_value(value):
-    mirrored_value = 100 - value  # Invert the value for coloring (lower values are "fear", higher are "greed")
-    colors = ["forestgreen", "green", "lightgreen", "gold", "orange", "darkorange", "red", "darkred"]
-    cmap = mcolors.LinearSegmentedColormap.from_list("fng", colors)  # Create a custom color map
-    norm = plt.Normalize(vmin=0, vmax=100)  # Normalize the color map between 0 and 100
-    rgba = cmap(norm(mirrored_value))  # Get RGBA color based on the mirrored value
-    return mcolors.to_hex(rgba)  # Convert RGBA to hex color
-
-# Function to draw the static meter (background, labels, etc.)
-def draw_static_meter(ax):
-    ax.set_aspect('equal')  # Make the aspect ratio equal for a circular meter
-    ax.axis('off')  # Hide the axis
-
-    # Create the semi-circle using parametric equations (theta)
-    theta = np.linspace(0, np.pi, 500)  # Angle range from 0 to 180 degrees
-    ax.plot(np.cos(theta), np.sin(theta), color='lightgray', linewidth=12, zorder=1)
-    ax.fill(np.cos(theta), np.sin(theta), color='lightgray', alpha=0.3, zorder=0)  # Fill background with a light color
-
-    # Create the color segments for the semi-circle
-    colors = ["forestgreen", "green", "lightgreen", "gold", "orange", "darkorange", "red", "darkred"]
-    cmap = mcolors.LinearSegmentedColormap.from_list("fng_full", colors)  # Define the color map
-    norm = plt.Normalize(vmin=0, vmax=100)  # Normalize the color map for the entire range
-    ax.scatter(np.cos(theta), np.sin(theta),
-               c=cmap(norm(np.linspace(0, 100, len(theta)))), s=75, zorder=2)  # Scatter points with colors based on Fear & Greed
-
-    # Text labels for 0, 100, and Neutral
-    ax.set_xlim([-1.3, 1.3]) # Increased horizontal limits
-    ax.text(-1.05, -0.05, '0 (extreme fear)', ha='center', va='center', color='darkred', fontweight='bold')
-    ax.text(1.05, -0.05, '100 (extreme greed)', ha='center', va='center', color='forestgreen', fontweight='bold')
-    ax.text(0, 1.15, 'Neutral', ha='center', va='center', color='gray')
-
-# Function to encapsulate the full GUI and animation process
-def call_fear_and_greed():
-    # Fetch Fear & Greed Index data
-    values = get_fng_data()
-    current, yesterday, week, month = values[0], values[1], values[7], values[29]
-
-    mirrored_target = 100 - current  # Mirror the current value for animation purposes (lower values are "fear")
-
-    # Create the root window for the Tkinter GUI
-    root = tk.Tk()
-    root.resizable(False, False)
-    root.title("Tracker - Crypto Fear & Greed Index")
-    icon_path = os.path.join(os.getcwd(), "crypto", f"fng.ico")
-    root.iconbitmap(icon_path)
-    #root.geometry("625x400")  # Set the window size
-
-    root.geometry("625x400")  # Set the window size
-    root.configure(bg="white")  # Set background color
-
-    # Set up the figure and axis for the meter
-    fig, ax = plt.subplots(figsize=(5, 2.8))
-    draw_static_meter(ax)  # Draw the static meter (background)
-
-    # Placeholder for the pointer and the current value text
-    pointer_artist = [None]
-    value_text = ax.text(0, -0.15, "", ha='center', va='center',
-                         fontsize=18, fontweight='bold', color='black',
-                         bbox=dict(facecolor='white', edgecolor='black', boxstyle='circle'))
-
-    # Embed the Matplotlib figure in the Tkinter window
-    canvas = FigureCanvasTkAgg(fig, master=root)
-    canvas_widget = canvas.get_tk_widget()
-    canvas_widget.pack(pady=10)
-
-    # Add bottom info circles for Yesterday, Last week, and Last month
-    bottom_frame = tk.Frame(root, bg="white")
-    bottom_frame.pack(pady=10)
-
-    for idx, (value, desc) in enumerate([
-        (yesterday, "Yesterday"),
-        (week, "Last week"),
-        (month, "Last month")
-    ]):
-        frame = tk.Frame(bottom_frame, bg="white")
-        frame.grid(row=0, column=idx, padx=30)
-
-        circle_color = get_color_for_value(value)
-
-        c = tk.Canvas(frame, width=30, height=30, bg="white", highlightthickness=0)
-        c.pack()
-        c.create_oval(3, 3, 27, 27, fill=circle_color, outline="")
-        c.create_text(15, 15, text=str(value), fill="black", font=("Arial", 8, "bold"))
-
-        label = tk.Label(frame, text=desc, bg="white", fg="black", font=("Arial", 8))
-        label.pack(pady=(5, 0))
-
-    # Animation settings
-    update_interval = 250  # 1/4 second interval for each pointer update (1 degree per second)
-    degree_step = 1  # The step of the angle in degrees (1 degree per second)
-    mirrored_step = degree_step / 1.8  # Step for mirrored value, based on the angle-to-value ratio
-    mirrored_current = 50  # Start from the neutral value (50)
-
-    # Function to update the pointer position
-    def update_pointer():
-        nonlocal mirrored_current
-
-        # Remove the previous pointer if it exists
-        if pointer_artist[0]:
-            pointer_artist[0].remove()
-
-        # Calculate the angle for the pointer (in radians)
-        angle = mirrored_current * 1.8
-        angle_rad = np.deg2rad(angle)  # Convert angle to radians
-
-        # Calculate the position of the pointer (arrow)
-        dx = 0.8 * np.cos(angle_rad)  # Horizontal component of the arrow
-        dy = 0.8 * np.sin(angle_rad)  # Vertical component of the arrow
-
-        # Draw the arrow (pointer)
-        arrow = ax.arrow(0, 0, dx, dy, head_width=0.05, head_length=0.1,
-                         fc='black', ec='black', linewidth=1, zorder=3)
-        pointer_artist[0] = arrow  # Store the arrow object to remove it later
-
-        # Once the target value is reached, show the current value
-        if abs(mirrored_current - mirrored_target) < mirrored_step:
-            mirrored_current = mirrored_target  # Snap to the target value
-            value_text.set_text(str(current))  # Show the current value
-        else:
-            value_text.set_text("")  # Clear the text while the animation is ongoing
-            # Increment or decrement the mirrored current value based on the target
-            mirrored_current += mirrored_step if mirrored_current < mirrored_target else -mirrored_step
-            root.after(update_interval, update_pointer)  # Call this function again after the update interval
-
-        # Redraw the canvas to show updated pointer and value
-        canvas.draw()
-
-    # Start the animation after a 1-second delay, first positioning at neutral
-    root.after(1000, update_pointer)
-
-    # Close handler to ensure proper shutdown when the window is closed
-    def on_closing():
-        plt.close(fig)  # Close the Matplotlib figure
-        root.destroy()  # Destroy the Tkinter window
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)  # Handle window closing event
-    root.mainloop()  # Start the Tkinter event loop
-
-# You can call the function like this:
-# call_fear_and_greed()
-
-# Included Python Programs
-# Live Aggr
-# Live Mempool
-# Live CoinTelegraph
-# ==========================
-# Calcpiv.py will ask for a csv. Currently on basis of Bitvavo's CSV. Calculates EUR IN, EUR Out,
-# Will calculate per coin the Average bought price. Will create in tracker.xlsx three update
-# sheets: Raw Data, Pivot Table Summary and Pivot Table Detailed. Will overwrite these values
-# the next time you load a csv file
 
 def call_aggr_window():
+    bg="black"
+    fg="white"
     window = webview.create_window("Tracker Live View AGGR", "https://www.aggr.trade/remr")
     webview.start()
     return window.evaluate_js("document.title")
@@ -1972,8 +1892,13 @@ def call_config_tracker():
     config_path = os.path.join(os.path.dirname(__file__), "config_tracker.py")
     subprocess.Popen(["python", config_path])
 
+def call_fng():
+    is_tracker_active=False
+    config_path = os.path.join(os.path.dirname(__file__), "fng.py")
+    subprocess.Popen(["python", config_path])
+
 def call_show_about():
-    config_path = os.path.join(os.path.dirname(__file__), "show_about.py")
+    config_path = os.path.join(os.path.dirname(__file__), "show_readme.py")
     subprocess.Popen(["python", config_path])
 
 
@@ -1999,6 +1924,7 @@ def get_coin_id(symbol):
 from PIL import Image, ImageTk
 import os
 
+
 def get_coin_icon(coin_symbol):
     """Search the icon (.png file) for the coin"""
     icon_path = os.path.join(os.getcwd(), "crypto", "ico", "32", f"{coin_symbol.lower()}.png")  # filename dynamic
@@ -2019,6 +1945,7 @@ def get_coin_icon(coin_symbol):
         image = image.resize((20, 20))  # Optional: adjust size
         print(f"Icon not found for: {coin_symbol}")
         return ImageTk.PhotoImage(image)
+
 
 def get_coin_icon_main(coin_symbol):
     """Search the icon (.png file) for the coin"""
@@ -2045,6 +1972,7 @@ def get_coin_icon_main(coin_symbol):
 
 
 # Get All Time high Value for the coin
+
 def get_ath(symbol):
     """Fetch ATH prices in both USD and EUR and return as separate values."""
     coin_id = get_coin_id(symbol)
@@ -2055,7 +1983,7 @@ def get_ath(symbol):
     url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
     try:
         response = requests.get(url).json()
-        time.sleep(0.5)  # Add a 0.5-second delay
+        time.sleep(2.1)  # Add a 0.5-second delay
         if "market_data" in response and "ath" in response["market_data"] and "usd" in response["market_data"]["ath"] and "eur" in response["market_data"]["ath"]:
             ath_usd = response["market_data"]["ath"]["usd"]
             ath_eur = response["market_data"]["ath"]["eur"]
@@ -2096,7 +2024,7 @@ def init_excel(filename="tracker.xlsx"):
 
     Args:
     filename (str, optional): The name under which the Excel file
-    should be saved. Defaults to "bct.xlsx".
+    should be saved. Defaults to "tracker.xlsx".
     """
     import os
     if os.path.exists(filename):
@@ -2236,10 +2164,9 @@ def try_create_and_save(filename):
         print(f"An error occurred while creating and saving the Excel file: {e}")
 
 
-
 def show_main_screen(root):
 
-    global is_tracker_active, after_id, main_widgets
+    global is_tracker_active, after_id, main_widgets, available_coins,default_coin, coin_list
 
     is_tracker_active = True
     print("Show main screen")
@@ -2309,13 +2236,19 @@ def show_main_screen(root):
         anchor="sw"
     )
     ath_cache = ath_label
-
     ath_label.place(relx=0.0, rely=1.0, anchor="sw", x=10, y=-10)
+
 
     # Dropdown menu for selecting the cryptocurrency
     coins_dropdown = ttk.Combobox(root, textvariable=selected_coin, values=available_coins, state="readonly")
+
+    if default_coin in coin_list:
+        default_coin_index = available_coins.index(default_coin)
+    elif coin_list: # If default coin not found, but list is not empty, select the first one
+        coins_dropdown.set(available_coins[0])
+
     coins_dropdown.pack(pady=10)
-    coins_dropdown.set(available_coins[0])
+    coins_dropdown.set(available_coins[default_coin_index])
     coins_dropdown.bind("<<ComboboxSelected>>", lambda event: update_gui(root, main_widgets))
 
     # Save references for later use
@@ -2352,71 +2285,40 @@ def show_main_screen(root):
 
 
 
-def show_about_window(root, main_widgets):
-    global is_tracker_active
-    is_tracker_active = False
-
-    about_window = tk.Toplevel(root)
-    about_window.title("About")
-    about_window.geometry("400x400")  # Same size as Cold Storage window
-
-    text_frame = ttk.Frame(about_window)
-    text_frame.pack(expand=True, fill='both')
-
-    text_scroll = ttk.Scrollbar(text_frame, orient=tk.VERTICAL)
-    text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-
-    about_text = tk.Text(text_frame, wrap=tk.WORD, yscrollcommand=text_scroll.set)
-    about_text.pack(expand=True, fill='both')
-    about_text.tag_configure("heading", font=("Arial", 14, "bold"))
-
-    text_scroll.config(command=about_text.yview)
-
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        about_path = os.path.join(script_dir, "README.md")
-        with open(about_path, "r", encoding="utf-8") as f:
-            about_content_md = f.read()
-            about_content_html = markdown.markdown(about_content_md)
-
-            # Insert HTML content - basic display, more complex styling might be needed
-            about_text.insert(tk.END, "About\n", "heading")
-            about_text.insert(tk.END, about_content_html)
-    except FileNotFoundError:
-        about_text.insert(tk.END, "Error: README.md not found.")
-        logging.error("README.md not found")
-    except Exception as e:
-        about_text.insert(tk.END, f"Error reading README.md: {e}")
-        logging.error(f"Error reading README.md: {e}")
-    about_text.config(state=tk.DISABLED)  # Make it read-only
-
-    def on_close():
-        global is_tracker_active
-        is_tracker_active = True
-        about_window.destroy()
-
-    about_window.protocol("WM_DELETE_WINDOW", on_close)
-
-
-
-
+@debug_log
 def main(root=None):
     global selected_coin, is_tracker_active, coin_symbols, menubar, main_widgets
     global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol
-    global fg_color,bg_color, fg_cold, fg_cyan, fg_day, fg_ani,fg_tot_assets, fg_tot_crypto
+    global fg_color,bg_color, fg_cold, fg_cyan, fg_day, fg_ani,fg_tot_assets
+    global fg_tot_crypto, fg_tot_storage
     global par_write_total, par_write_warm, par_write_cold
     global par_refresh_main,par_refresh_warm, par_refresh_cold, par_refresh_total
+    global available_coins,default_coin, coin_list
+
+
+
 
     filename='tracker.xlsx'
     if os.path.exists(filename):
-            print("\n✅ Tracker.xlsx found")
+        print("\n✅ Tracker.xlsx found")
     else:
-            print("\n🐞 No Tracker.xlsx found.")
-            print("\n ..... Going to create it")
-            init_excel(filename)
-            open_excel_file(filename)
+        print("\n❌ No Tracker.xlsx found.")
+        print("\n ..... Going to create it")
+        init_excel(filename)
+        open_excel_file(filename)
+    if os.path.exists('fng.py') and os.path.exists('crypto_ticker_module.py'):
+        print("\n✅ fng.py and crypto_ticker_module.py found")
+    else:
+        print("\n❌ No fng.py found or crypto_ticker_module.py")
+        print("\n❌ Fear & Greed will not work")
     if os.path.exists('calcpiv.py'):
-            print("\n✅ calcpiv.py found")
+        print("\n✅ calcpiv.py found")
+    else:
+        print("\n❌ No calcpiv.py found.")
+        print("\n❌ load & Calculate CSV will not work")
+
+    if os.path.exists('show_readme.py'):
+            print("\n✅ show_readme.py found")
 
     #
     # Read tracker.cfg and set VARIABLES par_refresh, par_user_name,
@@ -2432,7 +2334,7 @@ def main(root=None):
         if darkmod is True:
             print(f"   - Dark Mode Enabled: {app_settings['dark_mode']}")
         else:
-            print(f"   - Dark Mode Disabled: {app_settings['dark_mode']}")
+            print(f"   - Light Mode Enabled: True")
         par_user_name1 = app_settings.get('Name1', 'Not set')
 
         par_user_url1=app_settings.get('url1', 'Not set')
@@ -2447,17 +2349,42 @@ def main(root=None):
         par_refresh_warm = app_settings.get('refresh_warm')
         par_refresh_cold = app_settings.get('refresh_cold')
         par_refresh_total = app_settings.get('refresh_total')
-
+        #
+        # Multiply RefreshRate * 1000 to obtain seconds
+        #
         par_refresh_main = par_refresh_main * 1000
         par_refresh_warm = par_refresh_warm * 1000
         par_refresh_cold = par_refresh_cold * 1000
         par_refresh_total = par_refresh_total * 1000
 
+        par_debug_mode = app_settings.get('debug_mode')
 
-        # Example of using a setting in a conditional
+        log_level = logging.DEBUG if app_settings['debug_mode'] else logging.INFO
+        handlers = [
+            logging.StreamHandler(sys.stdout) # Logging to console
+            ]
+
+
+
+        # check if debug_mode is activated and set the logging correctly
+
         if app_settings['debug_mode']:
-            print("\n🐞 Debug mode is active.")
-            # Add any debug-specific logic here
+            print("\n🐞 Debug mode is active. Logging to 'tracker_log.log'.")
+            handlers.append(logging.FileHandler(
+                "tracker_log.log",
+                mode="w" # rewrite
+                ))
+
+            logging.basicConfig(
+                encoding="utf-8",
+                level=log_level,
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                handlers=handlers
+                )
+
+
+
+
 
     # parameter setting dark/light mode
     if darkmod is False:
@@ -2469,6 +2396,7 @@ def main(root=None):
         fg_ani="green"
         fg_tot_assets="black"
         fg_tot_crypto="black"
+        fg_tot_storage='black'
 
     else:
         bg_color="black"
@@ -2479,6 +2407,7 @@ def main(root=None):
         fg_ani="lightgreen"
         fg_tot_assets="lightgray"
         fg_tot_crypto="lightgreen"
+        fg_tot_storage='orange'
 
     ath_price_eur = 0
     ath_price_usd = 0
@@ -2492,7 +2421,7 @@ def main(root=None):
     default_coin = 'BTC'
 
 
-    # Build the list with owned coins
+    # Build the list with owned coins. Will be used in dropdown main screen
     # 1. Get the balances
     warm_balances = get_warm_exchange_balance()
     cold_balances = get_cold_storage_balance()
@@ -2512,6 +2441,7 @@ def main(root=None):
 
     # Convert the set to a sorted list for the dropdown
     coin_list = sorted(list(all_coins))
+    available_coins = coin_list
 
 
 
@@ -2525,8 +2455,8 @@ def main(root=None):
             root.iconbitmap(icon_path)  # Your .ico file path here
             root.configure(bg=bg_color)
             menubar = Menu(root)
-            print(root)
-            print(f"New root created: {root}, menubar: {menubar}")
+            #print(root)
+            #print(f"New root created: {root}, menubar: {menubar}")
 
             def call_show_warm_storage():
                 global main_widgets
@@ -2539,10 +2469,6 @@ def main(root=None):
             def call_show_total_assets():
                 global main_widgets
                 show_total_assets(root, main_widgets)
-
-            def call_show_about():
-                global main_widgets
-                show_about_window(root, main_widgets)
 
 
             def call_load_csv_calculate():
@@ -2560,11 +2486,11 @@ def main(root=None):
 
             # External menu
             external_menu = Menu(menubar, tearoff=0)
-            menubar.add_cascade(label="Live View", menu=external_menu)
-            external_menu.add_command(label="Fear and Greed", command=call_fear_and_greed)
+            menubar.add_cascade(label="Crypto Sentiment", menu=external_menu)
+            external_menu.add_command(label="Fear and Greed", command=call_fng)
             external_menu.add_command(label="AGGR Live View", command=call_aggr_window)
 
-            #external_menu.add_command(label="Mempool", command=lambda: call_mempool_window())
+            #external_menu.add_command(par_user_name(x), par_user_url(x))
             external_menu.add_command(label=par_user_name1, command=lambda: call_user_window(par_user_name1,par_user_url1))
             external_menu.add_command(label=par_user_name2, command=lambda: call_user_window(par_user_name2,par_user_url2))
             external_menu.add_command(label=par_user_name3, command=lambda: call_user_window(par_user_name3,par_user_url3))
@@ -2590,7 +2516,7 @@ def main(root=None):
             About_menu.add_command(label="About", command=call_show_about)
 
             root.config(menu=menubar)
-            print(f"Root config('menu') na creatie: {root.config('menu')}")
+            #print(f"Root config('menu') after creation: {root.config('menu')}")
 
         except Exception as e:
             logging.error(f"Failure initializing root: {e}")
@@ -2616,17 +2542,17 @@ def main(root=None):
         main_labels['header_white'].pack(side="left")
         main_labels['header_orange'].pack(side="left")
 
-        # Eén gezamenlijke frame voor EUR en USD om perfect uit te lijnen
+        # One frame for EUR USD to align perfectly
         main_labels['rates_frame'] = tk.Frame(root, bg=bg_color)
         main_labels['rates_frame'].pack(pady=5)
 
-        # EUR regel
+        # EUR Line
         main_labels['eur_text'] = tk.Label(main_labels['rates_frame'], text="EUR:", font=title_font, fg=fg_color, bg=bg_color, anchor="e", width=5)
         main_labels['eur_text'].grid(row=0, column=0, sticky="e")
         main_labels['eur_value'] = tk.Label(main_labels['rates_frame'], text="Loading...", font=title_font, fg=fg_color, bg=bg_color)
         main_labels['eur_value'].grid(row=0, column=1, sticky="w")
 
-        # USD regel
+        # USD Line
         main_labels['usd_text'] = tk.Label(main_labels['rates_frame'], text="USD:", font=title_font, fg=fg_color, bg=bg_color, anchor="e", width=5)
         main_labels['usd_text'].grid(row=1, column=0, sticky="e")
         main_labels['usd_value'] = tk.Label(main_labels['rates_frame'], text="Loading...", font=title_font, fg=fg_color, bg=bg_color)
@@ -2678,6 +2604,8 @@ def main(root=None):
         coins_dropdown = ttk.Combobox(root, textvariable=selected_coin, values=coin_list, state="readonly", height=combobox_height)
         coins_dropdown.pack()
         #coins_dropdown.set(available_coins[0])
+
+        #available_coins = coin_list
         if default_coin in coin_list:
             default_coin_index = coin_list.index(default_coin)
             coins_dropdown.set(coin_list[default_coin_index])

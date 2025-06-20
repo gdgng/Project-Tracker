@@ -1,100 +1,180 @@
-# Project-Tracker
-Crypto Tracker version 1.0: tracks coins, shows warm and cold storage, stocks and reads csv from exchange.
-![Main](https://github.com/user-attachments/assets/7eb47667-0389-4f00-885e-3528f6174888)
+# Crypto Price Tracker V1.1 (2025)
 
-![main4](https://github.com/user-attachments/assets/441937c9-8c83-4f5c-a807-e8059a8c5cb2)
+This tracker keeps track of crypto coins in your possession. It provides an overview of:
 
+- **Warm storage**: Coins and value on the exchange  
+- **Cold storage**: Coins and value in hardware wallets  
+- **Stocks**: (Currently under development)
 
-Still work in progress. Fully functional version. Written in Python. Run from the commandline or use 
-auto-py-to-exe to make an excutable (Windowss). Still a lot of work to be done. Feel free to use and experiment. 
-I had to learn Python for it but with help of Gemin, Co-pilot and Chatgtp it was a start for an intresting experience. 
-To make a Crypto Fear and Greed index with AI is, at the least, an adventure. It gave an insight in how to formulate a 
-better prompt. It took a few hours to explain that fear and greed was positioned correctly but the colors where just
-wrong and on the wrong side.
+It reads CSV files from your exchange and provides summaries and pivot tables in `tracker.xlsx`.
 
-If you use the program and make adjustments, please let me know. Woukd like to learn. 
+You can adjust refresh rates, enable Excel writing, and view optional live view websites via the **Parameters** screen.
 
-Main program: tracker.py needs tracker.xlsx
-sub programs:
-  - calcpiv.py (load and calculte csv-file)
-  - README.MD
+---
 
-**Main program **
-Will start with the price of BTC in EUR and Dollars; Shows the latest ATH.  Will refresh every 30 seconds
+## 📌 Introduction
 
-**Option Warm Storage**
-Gets the coins from the exchange and shows all the coins from the exchange with coin name, rate (in EUR), amount and current vakue (in EUR). 
-Connection with the exchange depends on the tracker.xlsx sheet Credentials. Fill in the shortname of the exchange, Key, Secret Key and URL. 
-Screen refreshes every 20 seconds
-![WarmStorage](https://github.com/user-attachments/assets/cfd72f67-547b-4220-805d-a125d8bf35fa)
+Tracker was born out of frustration—too many screens to monitor my crypto holdings, stock values, and average purchase prices. Maintaining a spreadsheet manually took too much effort.
 
+Instead of opting for an integrated solution, I chose to experiment with AI tools like **Copilot, Claude, Gemini, DeepSeek**, and **ChatGPT**. The journey was full of trial and error—especially the Crypto Fear and Greed Index, where pointer directions and color logic took many iterations to get right.
 
+Starting from basic Python knowledge, this project deepened my understanding of Python and AI. It’s still a work in progress—and a fun one at that.
 
-**Option Cold Storage** 
-Gets thwe coins from tracker.xlsx sheet Cold_Storage where the user has put in the coinname and the amount. 
-Will show all the coins from the exchange with coin name, rate (in EUR), amount and current vakue (in EUR)
-Screen refreshes every 20 seconds.
-![ColdStorage](https://github.com/user-attachments/assets/87c80a33-231e-4382-b512-02fa4eb10048)
+---
 
+## 🛠️ Setting Up
 
-**Option Input Stocks**
-Currently still working on the api for this. Option is currently manual, and asks for the total stock value. 
-If used, it will be shown on the total assets screen.
+You can run the program in a Python environment or build a Windows executable using [auto-py-to-exe](https://github.com/brentvollebregt/auto-py-to-exe).
 
-![InputStocks](https://github.com/user-attachments/assets/e9643a96-106e-4dae-b675-8b6c8bcc189e)
+### Required files and structure:
 
+```
+tracker.py  
+tracker.cfg  
+config_tracker.py  
+calcpiv.py  
+show_readme.py  
+/crypto/
+```
 
+---
 
-**Option Total Assets**
-Shows Warm Storage, Cold Storage, Stock (if available) and gives Total Assets. If a csv file has been read and calculated
-it will show the amount of money put in the exchange, the amount money taken out of the exchange The current Total Invest 
-and the Profit/loss
-![TotalAssets](https://github.com/user-attachments/assets/d72d91ab-5fc0-4961-b863-ce21717b991d)
+## 📂 File Descriptions
 
+### `tracker.py`
+Main program. Checks for `tracker.xlsx`, creates it if not found.  
+- **Credentials** sheet: add API keys from your exchange.  
+- **Cold_Storage** sheet: enter coin name and amount (value is fetched live).  
 
-**Live View Fear and Greed**
-Shows the current Crypto Fear and Greed index graphically, with a bit of animation. Shows also the index from yesterday, last week and last month
+### `tracker.cfg`
+Auto-generated config file with default settings:
 
+```ini
+[RefreshRate]
+main = 30
+warm = 15
+cold = 15
+total = 15
 
-![fearandgreed](https://github.com/user-attachments/assets/af312a20-f8fa-4246-aecf-aeb87a45e75d)
+[WriteData]
+warm = True
+cold = False
+total = True
+csv = True
 
+[OptionalURL]
+url1 = https://cointelegraph.com/
+name1 = Cointelegraph
+url2 = https://www.coindesk.com/
+name2 = Coindesk
+url3 = https://edition.cnn.com/business
+name3 = CNN Business
 
-**Live View AGGR**
-Opens een AGGR window and shows the progress of the value of Bitcoin. 
+[Miscellaneous]
+debugmode = False
+darkmod = False
+notifications = False
+cold storage available = True
+```
 
-![AggrViewer](https://github.com/user-attachments/assets/11c0098f-115e-402f-9b89-79704f26091b)
+### `config_tracker.py`
+Handles screen refresh rates and Excel writing.  
+Note:  
+- Setting the main screen refresh below 15s may result in **CoinGecko** rejecting requests.  
+- Only **dark mode** and **cold storage** toggles are currently functional.  
 
+### `calcpiv.py`
+Processes your exchange CSV file.  
+If enabled in config, it writes:
+- Summary → `CSV_History`  
+- Raw data → `Raw Data`  
+- Pivot tables → `Pivot Table Summary` and `Pivot Table Detail`
 
+### `show_readme.py`
+Displays this README from within the program.
 
-**Live View Mempool**
-Opens a mempool window. 
+### `/crypto/` directory
+Contains screen and crypto icons in `crypto/ico/32/`.  
+Missing icons have been auto-created. You may customize them.
 
-![Mempool](https://github.com/user-attachments/assets/da446916-db53-4091-8749-6c687f871800)
+---
 
-**Live View Cointelegraph**
-Same routine. Shows website. 
-hese option wil be changable in the parameters section (still have to build thist one) 
+## 🧭 Menu Options Overview
 
-![CoinTele](https://github.com/user-attachments/assets/c63f16a7-86da-4726-89c4-6db0fafe3f46)
+### 🏠 Main Screen
+- Always starts with **Bitcoin**
+- Dropdown: choose other coins
+- Bottom-right: exchange rate (EUR/USD)
+- Bottom-left: all-time high of selected coin
 
+---
 
+### 🔥 Warm Storage
+View coins stored on your exchange.
 
-**CSV Data -Load and Calculate**
-Reads a CSV file (Currently BITVAVO's )
-This is the seperate program calcpiv.py.
-Caculates per coin total current amount, Average bought value, total investment, profit and loss, etc
-Will populate tracker.xls with the raw data, pivot table detailed and pivot tavle summary. 
-Still work in progress. 
+### 🧊 Cold Storage
+Manually enter your cold storage holdings in `Cold_Storage` worksheet. Values are fetched live using your exchange credentials.
 
-![csv_load_calc](https://github.com/user-attachments/assets/fc745e17-a050-477c-9e6c-5889de435387)
+### 📈 Input Stocks
+Currently, only manual input of total stock value.  
+Future version will include API integration.
 
+---
 
+### 🌐 Live Views
 
+- **Fear and Greed**: current crypto Fear and Greed index  
+- **AGGR View**: live Bitcoin trading  
+- **User-defined live views**:
+  - Default 1: [Cointelegraph](https://cointelegraph.com)
+  - Default 2: [Coindesk](https://www.coindesk.com)
+  - Default 3: [CNN Business](https://edition.cnn.com/business)
 
+---
 
+### 📑 CSV Data
 
+#### Load & Calculate
+Loads and processes CSV from your exchange:
+- Creates `CSV_History`, `Raw Data`, and pivot tables in `tracker.xlsx` (if enabled).
 
+---
 
+### ⚙️ Config - Parameters
 
+- **Top left**: Set screen refresh rates  
+- **Top right**: Enable writing data to Excel  
+- **Bottom left**: Set URLs for live views  
+- **Bottom right**: Toggle:
+  - Debug mode
+  - Dark mode
+  - Notifications (not implemented yet)
+  - Cold storage availability
 
+---
 
+### 🧾 Excel Control
+
+- **Open Excel**: Opens `tracker.xlsx`  
+- **Init Excel**: Creates a fresh `tracker.xlsx`  
+  > Warning: All existing data will be lost!  
+  > Refill `Credentials` to restart tracking
+
+---
+
+### ❓ About
+
+You're reading it!
+
+---
+
+## 💬 Contact
+
+Use this program however you like—adjust, expand, break, or improve it.  
+I'd love to hear about major improvements or ideas!
+
+📧 **gdgng01@gmail.com**
+
+---
+
+**Happy Tracking! 🚀**
