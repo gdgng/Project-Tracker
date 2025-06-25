@@ -151,7 +151,7 @@ Loads and processes CSV from your exchange:
 - **Bottom right**: Toggle:
   - Debug mode
   - Dark mode
-  - Notifications (not implemented yet)
+  - Demo Mode (not implemented yet)
   - Cold storage availability
 
 ---
