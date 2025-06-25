@@ -1,4 +1,4 @@
-# Crypto Price Tracker V1.1 (2025)
+# Crypto Price Tracker V1.5 (2025)
 
 This tracker keeps track of crypto coins in your possession. It provides an overview of:
 
