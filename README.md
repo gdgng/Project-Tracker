@@ -30,9 +30,12 @@ You can run the program in a Python environment or build a Windows executable us
 
 ```
 tracker.py  
-tracker.cfg  
-config_tracker.py  
-calcpiv.py  
+tracker.cfg
+tracker.xlsx
+config_tracker_module.py  
+calcpiv_module.py
+fng_module.py
+crypto_ticker_module.py
 show_readme.py  
 /crypto/
 ```
@@ -121,14 +124,14 @@ Future version will include API integration.
 
 ---
 
-### 🌐 Live Views
+### 🌐 Crypto Sentiment
 
 - **Fear and Greed**: current crypto Fear and Greed index  
 - **AGGR View**: live Bitcoin trading  
 - **User-defined live views**:
   - Default 1: [Cointelegraph](https://cointelegraph.com)
   - Default 2: [Coindesk](https://www.coindesk.com)
-  - Default 3: [CNN Business](https://edition.cnn.com/business)
+  - Default 3: [Coinmarket Sentiment )
 
 ---
 
