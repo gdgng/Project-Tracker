@@ -73,7 +73,7 @@ name3 = CNN Business
 [Miscellaneous]
 debugmode = False
 darkmod = False
-notifications = False
+demomod = False
 cold storage available = True
 ```
 
