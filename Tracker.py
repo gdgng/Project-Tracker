@@ -8,7 +8,7 @@
 #            visual changes to Fear and Greed
 # 21-05-2025 V1.05 Changes in correctly handling
 #            update screens for Warm, Cold and Total. No label errors. Write Total after exit to tracker
-# 03-06-2025 ESTRA Graphical Adjustment (ICON's for Coins, ICON labels for screens, rework on cold and warm storage)
+# 03-06-2025 EXTRA Graphical Adjustment (ICON's for Coins, ICON labels for screens, rework on cold and warm storage)
 #--------------------------------------------------------------------------------------------------
 # Bitcoin_tracker EUR/USD Value. Gets the EUR value from an exchange, site scraping for the current
 # dollar value.
@@ -68,7 +68,7 @@ from functools import wraps
 # or default values. Functions like show_total_assets will then manage them.
 global bg_color, fg_color, fg_cold, fg_cyan, fg_day, fg_ani, darkmod, fg_tot_assets
 global fg_tot_storage, debugmode
-global par_refresh_main, par_debug_mode
+global par_refresh_main, par_debug_mode, par_demo_mode
 
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
@@ -89,6 +89,7 @@ status_label_total = None
 btc_label = None
 back_button = None
 current_warm_data = []
+par_demo_mode=False
 
 # Other globals needed for calculations that might be updated elsewhere
 total_stocks = 0.0
@@ -205,9 +206,32 @@ def get_coin_exchange_ticker(market):
 
 
 def get_warm_exchange_balance():
+    global par_demo_mode
+
+    if par_demo_mode:
+        return {
+            'OP':   {'available': 1000.0, 'in_order': 0.0},
+            'EUR':  {'available': 1000.0, 'in_order': 0.0},
+            'MANA': {'available': 1000.0, 'in_order': 0.0},
+            'HYPE': {'available': 1000.0, 'in_order': 1.0},
+#            'VET':  {'available': 10.0, 'in_order': 0.0},
+            'DOGE': {'available': 1000.0, 'in_order': 0.0},
+#            'ATOM': {'available': 10.0, 'in_order': 0.0},
+#            'ETH':  {'available': 1.0,  'in_order': 1.0},
+            'ICX':  {'available': 1000.0, 'in_order': 0.0}
+        }
+
     data = warm_exchange_req('GET', "balance")
+
     if data:
-        return {item['symbol']: {'available': float(item['available']), 'in_order': float(item['inOrder'])} for item in data}
+        return {
+            item['symbol']: {
+                'available': float(item['available']),
+                'in_order': float(item['inOrder'])
+            }
+            for item in data
+        }
+
     return None
 
 
@@ -270,7 +294,7 @@ def load_app_settings():
         # Miscellaneous options
         'debug_mode': False,
         'dark_mode': True,
-        'notifications': False,
+        'demo_mode': False,
         'cold_storage_available': False
     }
 
@@ -305,7 +329,7 @@ def load_app_settings():
             if config.has_section('Miscellaneous'):
                 app_settings['debug_mode'] = config.getboolean('Miscellaneous', 'DebugMode', fallback=False)
                 app_settings['dark_mode'] = config.getboolean('Miscellaneous', 'darkmod', fallback=True)
-                app_settings['notifications'] = config.getboolean('Miscellaneous', 'Notifications', fallback=False)
+                app_settings['demo_mode'] = config.getboolean('Miscellaneous', 'DemoMode', fallback=False)
                 app_settings['cold_storage_available'] = config.getboolean('Miscellaneous', 'Cold Storage Available', fallback=False)
 
     except Exception as e:
@@ -320,8 +344,9 @@ def update_gui(root, labels):
     global previous_prices, selected_coin, balances, is_tracker_active, after_id
     global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol, ath_cache
 
-    print("Dev Update_gui called")
-    print("is_tracker_active: ", is_tracker_active)
+    #print("update_gui called")
+    #print("is_tracker_active: ", is_tracker_active)
+
     # Stop if event is set, tracker is inactive, or root does not exist anymore
     # Should be inactive or False by Warm Storage, Cold Storage and Total Assets
     if stop_event.is_set() or not is_tracker_active or not root.winfo_exists():
@@ -469,7 +494,21 @@ def update_gui(root, labels):
 
 @debug_log
 def get_cold_storage_balance():
+    global par_demo_mode
     cold_storage = {}
+    print(par_demo_mode)
+    if par_demo_mode:
+        # Coins and amounts for demo_mode
+        cold_storage = {
+            'BTC': 0.1,
+            'ETH': 10,
+            'XRP': 10,
+            'ADA': 10,
+            'SOL': 10,
+            'POLS': 10
+        }
+        return cold_storage  # Sla Excel inlezen over
+
     try:
         wb = openpyxl.load_workbook('tracker.xlsx')
         if 'Cold_Storage' in wb.sheetnames:
@@ -496,6 +535,7 @@ def get_cold_storage_balance():
         print("Error: 'tracker.xlsx' not found. No cold storage data loaded.")
     except Exception as e:
         print(f"Error reading 'Cold_Storage' sheet: {e}. No cold storage data loaded.")
+
     return cold_storage
 
 def init_excel():
@@ -534,7 +574,7 @@ def about():
 @debug_log
 def show_warm_storage(root):
     global is_tracker_active, updater_job_warm, status_label_warm, btc_label, back_button
-    root.title("Warm Storage - Crypto Price Tracker V1.1")
+    root.title("Warm Storage - Crypto Price Tracker V1.5")
     icon_path = os.path.join(os.getcwd(), "crypto", f"ThermoWarm.ico")
     root.iconbitmap(icon_path)  # Your .ico file path here
     root.configure(bg=bg_color)
@@ -576,7 +616,11 @@ def show_warm_storage(root):
         root.configure(bg=bg_color)
 
         # Title
-        assets_label = tk.Label(root, text="Warm Storage Assets", font=("Helvetica", 20, "bold"), fg="orange", bg=bg_color)
+        if par_demo_mode:
+
+            assets_label = tk.Label(root, text="Warm Storage Assets * Demo Mode *", font=("Helvetica", 20, "bold"), fg="orange", bg=bg_color)
+        else:
+            assets_label = tk.Label(root, text="Warm Storage Assets", font=("Helvetica", 20, "bold"), fg="orange", bg=bg_color)
         assets_label.pack(pady=10)
 
         if balances:
@@ -792,7 +836,7 @@ def show_warm_storage(root):
             logging.error(f"Spreadsheet export failed: {e}")
 
 
-        root.title("Main - Crypto Price Tracker V1.1")
+        root.title("Main - Crypto Price Tracker V1.5")
         icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
         root.iconbitmap(icon_path)  # Your .ico file path here
         root.configure(bg=bg_color)
@@ -831,7 +875,7 @@ def show_cold_storage(root, main_widgets):
     # Globals to manage tracker status, update job, and status label
     global is_tracker_active, updater_job_cold, status_label_cold, btc_label, back_button
 
-    root.title("Cold Storaqge - Crypto Price Tracker V1.1")
+    root.title("Cold Storaqge - Crypto Price Tracker V1.5")
     icon_path = os.path.join(os.getcwd(), "crypto", f"ThermoCold.ico")
     print(icon_path)
     root.iconbitmap(icon_path)  # Your .ico file path here
@@ -868,7 +912,10 @@ def show_cold_storage(root, main_widgets):
         current_cold_data = []
 
         # Display Cold Storage header
-        cold_storage_label = tk.Label(root, text="Cold Storage Assets", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
+        if par_demo_mode:
+            cold_storage_label = tk.Label(root, text="Cold Storage Assets *Demo Mode*", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
+        else:
+            cold_storage_label = tk.Label(root, text="Cold Storage Assets", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
         cold_storage_label.pack(pady=10)
 
         if cold_storage_balances:
@@ -1070,7 +1117,7 @@ def show_cold_storage(root, main_widgets):
             logging.error(f"Spreadsheet export failed: {e}")
 
 
-        root.title("Main - Crypto Price Tracker V1.1")
+        root.title("Main - Crypto Price Tracker V1.5")
         icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
 
         root.iconbitmap(icon_path)  # Your .ico file path here
@@ -1104,6 +1151,9 @@ def show_cold_storage(root, main_widgets):
 
 @debug_log
 def set_total_stocks(parent):
+    global par_demo_mode
+    if par_demo_mode:
+        return
 
 
     filename='tracker.xlsx'
@@ -1214,8 +1264,10 @@ def on_leave(event):
 @debug_log
 def write_totals(total_warm_value, total_cold_value, total_stocks_value, total_assets_value,
                  amount_deposit, amount_withdraw, t_invest, T_PL, pl_percentage, btc_price):
+    global par_demo_mode
 
-
+    if par_demo_mode:
+        return
 
     file_name = "tracker.xlsx"
     """Opens or creates an Excel file and writes totals on the latest row + 1"""
@@ -1286,6 +1338,7 @@ def write_totals(total_warm_value, total_cold_value, total_stocks_value, total_a
 
 @debug_log
 def write_horizontal(coins_data, storage):
+    global par_demo_mode
     """
     Writes warm or cold storage data horizontally across columns
 
@@ -1293,6 +1346,8 @@ def write_horizontal(coins_data, storage):
         coins_data: List of dictionaries with keys: 'coin', 'amount', 'rate', 'value'
                    Example: [{'coin': 'BTC', 'amount': 1.5, 'rate': 45000, 'value': 67500}, ...]
     """
+    if par_demo_mode:
+        return
     file_name = "tracker.xlsx"
 
     try:
@@ -1483,12 +1538,12 @@ def show_total_assets(root, main_widgets):
     global balances, is_tracker_active
     global warm_value, cold_value, total_assets_value_label
     global updater_job_total, animation_job_id, write_total # <--- Added animation_job_id here
-    global total_stock_value
+    global total_stock_value, par_demo_mode
     global status_label, btc_label # Make sure btc_label is accessible
     global T_EUR_I, T_EUR_O, T_INVST, T_PL, pl_percentage,btc_price
     global warm_value_var, cold_value_var, total_assets_value_var, total_perc_var, total_crypto_text_var, total_pl_var
 
-    root.title("Total Assets - Crypto Price Tracker V1.1")
+    root.title("Total Assets - Crypto Price Tracker V1.5")
     icon_path = os.path.join(os.getcwd(), "crypto", f"MoneyTot.ico")
     root.iconbitmap(icon_path)  # Your .ico file path here
     root.configure(bg=bg_color)
@@ -1498,39 +1553,45 @@ def show_total_assets(root, main_widgets):
         for i in range(menu.index('end') + 1):  # Loop through each item
             menu.entryconfig(i, state="disabled")  # Disable each item
 
-
-    file_path = 'tracker.xlsx'
-    amounts = find_eur_and_get_amounts(file_path)
-
-    if amounts:
-        deposit_value, withdrawal_value = amounts
-        print(f"For EUR, the 'Amount deposit' is: {deposit_value} and 'Amount withdrawal' is: {withdrawal_value}")
-        T_EUR_I = deposit_value
-        T_EUR_O = abs(withdrawal_value)
+    if par_demo_mode:
+        T_EUR_I = 40000
+        T_EUR_O = 10000
         T_INVST = T_EUR_I - T_EUR_O
+    else:
+        file_path = 'tracker.xlsx'
+        amounts = find_eur_and_get_amounts(file_path)
+
+        if amounts:
+            deposit_value, withdrawal_value = amounts
+            print(f"For EUR, the 'Amount deposit' is: {deposit_value} and 'Amount withdrawal' is: {withdrawal_value}")
+            T_EUR_I = deposit_value
+            T_EUR_O = abs(withdrawal_value)
+            T_INVST = T_EUR_I - T_EUR_O
 
     C_counter = 0
     C_date = None
     # total_stock_value is already global and initialized, no need to re-initialize here
     # T_PL is already global and initialized, no need to re-initialize here
-
-    if total_stocks == 0:
-        try:
-            wb = openpyxl.load_workbook('tracker.xlsx')
-            ws = wb['Stocks']
-            # Get latest row in worksheet
-            latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=1)
-            C_counter = latest_row
-            C_date = ws['A' + str(C_counter)].value
-            total_stock_value = ws['B' + str(C_counter)].value
-        except FileNotFoundError:
-            print("assigned total_stock_value is wrong / file not found or sheet not found")
-        except KeyError:
-            print("Sheet 'Stocks' or cell 'C1'/'A'/'B' not found in tracker.xlsx")
-        except Exception as e:
-            print(f"An error occurred while reading Excel: {e}")
+    if par_demo_mode:
+        total_stock_value= 25000
     else:
-        total_stock_value = total_stocks
+        if total_stocks == 0:
+            try:
+                wb = openpyxl.load_workbook('tracker.xlsx')
+                ws = wb['Stocks']
+                # Get latest row in worksheet
+                latest_row = max((cell.row for row in ws.iter_rows() for cell in row if cell.value), default=1)
+                C_counter = latest_row
+                C_date = ws['A' + str(C_counter)].value
+                total_stock_value = ws['B' + str(C_counter)].value
+            except FileNotFoundError:
+                print("assigned total_stock_value is wrong / file not found or sheet not found")
+            except KeyError:
+                print("Sheet 'Stocks' or cell 'C1'/'A'/'B' not found in tracker.xlsx")
+            except Exception as e:
+                print(f"An error occurred while reading Excel: {e}")
+        else:
+            total_stock_value = total_stocks
 
     total_pl_var = tk.StringVar(root, value="0.00")
 
@@ -1639,12 +1700,12 @@ def show_total_assets(root, main_widgets):
         btc_val=get_coin_exchange_ticker('BTC-EUR')
         btc_price=btc_val["price"]
         print(par_write_total)
-        if par_write_total is True:
+        if par_write_total:
             write_totals(warm_value_var.get(), cold_value_var.get(), total_stock_value,
                     total_assets_value_var.get(),T_EUR_I, T_EUR_O, T_INVST, total_pl_var.get(), pl_percentage,
                     btc_price)
 
-        root.title("Main - Crypto Price Tracker V1.1")
+        root.title("Main - Crypto Price Tracker V1.5")
         icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
         root.iconbitmap(icon_path)  # Your .ico file path here
         root.configure(bg=bg_color)
@@ -1691,8 +1752,10 @@ def show_total_assets(root, main_widgets):
 
     root.geometry("700x700")
     root.configure(bg=bg_color)
-
-    title_label = tk.Label(root, text="Total Assets Overview", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
+    if par_demo_mode:
+        title_label = tk.Label(root, text="Total Assets Overview * Demo Mode *", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
+    else:
+        title_label = tk.Label(root, text="Total Assets Overview", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
     title_label.pack(pady=10)
 
     tot_frame = tk.Frame(root, bg=bg_color)
@@ -1703,9 +1766,9 @@ def show_total_assets(root, main_widgets):
 
     warm_frame = tk.Frame(root, bg=bg_color)
     warm_frame.pack(pady=5, fill="x")
-    warm_label = tk.Label(warm_frame, text="Value Warm Storage:", font=("Helvetica", 14), fg="Orange", bg=bg_color, anchor="w")
+    warm_label = tk.Label(warm_frame, text="Value Warm Storage:", font=("Helvetica", 14, "bold"), fg="Orange", bg=bg_color, anchor="w")
     warm_label.pack(side="left", padx=(20, 0))
-    warm_value = tk.Label(warm_frame, textvariable=warm_value_var, font=("Helvetica", 14), fg="Orange", bg=bg_color, anchor="e")
+    warm_value = tk.Label(warm_frame, textvariable=warm_value_var, font=("Helvetica", 14,"bold"), fg="Orange", bg=bg_color, anchor="e")
     warm_value.pack(side="right", padx=(0, 20))
 
     cold_frame = tk.Frame(root, bg=bg_color)
@@ -1847,7 +1910,6 @@ def show_total_assets(root, main_widgets):
 
 
 
-# Function to fetch Fear & Greed Index data
 
 
 def call_aggr_window():
@@ -1877,28 +1939,32 @@ def call_mempool_window():
 
 
 def call_user_window(name,url):
-    window = webview.create_window("Tracker Live View "+name, url)
+    window = webview.create_window("Tracker Crypto Sentiment"+name, url)
     webview.start()
     return window.evaluate_js("document.title")
 
 
-
-
 def call_csv_window():
-    csv_path = os.path.join(os.path.dirname(__file__), "calcpiv.py")
+    csv_path = os.path.join(os.path.dirname(__file__), "calcpiv_module.py")
     subprocess.Popen(["python", csv_path])
 
 def call_config_tracker():
-    config_path = os.path.join(os.path.dirname(__file__), "config_tracker.py")
+    config_path = os.path.join(os.path.dirname(__file__), "config_tracker_module.py")
     subprocess.Popen(["python", config_path])
 
 def call_fng():
-    is_tracker_active=False
-    config_path = os.path.join(os.path.dirname(__file__), "fng.py")
-    subprocess.Popen(["python", config_path])
+    global is_tracker_active
+    is_tracker_active = False
+    print("Start van de call met is_tracker_active", is_tracker_active)
+
+    config_path = os.path.join(os.path.dirname(__file__), "fng_module.py")
+    #subprocess.Popen(["python", config_path])
+    subprocess.run(["python", config_path])
+    is_tracker_active=True
+    print("Einde van de call met is_tracker_active", is_tracker_active)
 
 def call_show_about():
-    config_path = os.path.join(os.path.dirname(__file__), "show_readme.py")
+    config_path = os.path.join(os.path.dirname(__file__), "show_readme_module.py")
     subprocess.Popen(["python", config_path])
 
 
@@ -2291,7 +2357,7 @@ def main(root=None):
     global ath_price_eu, ath_price_usd, ath_price_str, ath_coin_symbol
     global fg_color,bg_color, fg_cold, fg_cyan, fg_day, fg_ani,fg_tot_assets
     global fg_tot_crypto, fg_tot_storage
-    global par_write_total, par_write_warm, par_write_cold
+    global par_write_total, par_write_warm, par_write_cold, par_demo_mode
     global par_refresh_main,par_refresh_warm, par_refresh_cold, par_refresh_total
     global available_coins,default_coin, coin_list
 
@@ -2306,19 +2372,19 @@ def main(root=None):
         print("\n ..... Going to create it")
         init_excel(filename)
         open_excel_file(filename)
-    if os.path.exists('fng.py') and os.path.exists('crypto_ticker_module.py'):
-        print("\n✅ fng.py and crypto_ticker_module.py found")
+    if os.path.exists('fng_module.py') and os.path.exists('crypto_ticker_module.py'):
+        print("\n✅ fng_module.py and crypto_ticker_module.py found")
     else:
-        print("\n❌ No fng.py found or crypto_ticker_module.py")
+        print("\n❌ No fng_module.py found or crypto_ticker_module.py")
         print("\n❌ Fear & Greed will not work")
-    if os.path.exists('calcpiv.py'):
-        print("\n✅ calcpiv.py found")
+    if os.path.exists('calcpiv_module.py'):
+        print("\n✅ calcpiv_module.py found")
     else:
-        print("\n❌ No calcpiv.py found.")
+        print("\n❌ No calcpiv_module.py found.")
         print("\n❌ load & Calculate CSV will not work")
 
-    if os.path.exists('show_readme.py'):
-            print("\n✅ show_readme.py found")
+    if os.path.exists('show_readme_module.py'):
+            print("\n✅ show_readme_module.py found")
 
     #
     # Read tracker.cfg and set VARIABLES par_refresh, par_user_name,
@@ -2326,6 +2392,7 @@ def main(root=None):
     #
 
     app_settings = load_app_settings()
+
 
     if app_settings:
         print("\n✅ Configuration loaded successfully!")
@@ -2358,6 +2425,8 @@ def main(root=None):
         par_refresh_total = par_refresh_total * 1000
 
         par_debug_mode = app_settings.get('debug_mode')
+        par_demo_mode = app_settings.get('demo_mode')
+
 
         log_level = logging.DEBUG if app_settings['debug_mode'] else logging.INFO
         handlers = [
@@ -2382,6 +2451,8 @@ def main(root=None):
                 handlers=handlers
                 )
 
+        if par_demo_mode:
+            print("\n🐞 Demo mode is active. No real data.")
 
 
 
@@ -2450,7 +2521,7 @@ def main(root=None):
         try:
             root = tk.Tk()
             root.resizable(False, False)
-            root.title("Main - Crypto Price Tracker V1.1")
+            root.title("Main - Crypto Price Tracker V1.5")
             icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
             root.iconbitmap(icon_path)  # Your .ico file path here
             root.configure(bg=bg_color)

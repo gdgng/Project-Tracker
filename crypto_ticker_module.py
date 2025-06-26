@@ -63,6 +63,7 @@ class CryptoTicker:
         params = {
             "vs_currency": "usd",
             "order": "market_cap_desc",
+            # amount of coinsw shown first <amount> based on marketcap
             "per_page": 20,
             "page": 1,
             "price_change_percentage": "24h"

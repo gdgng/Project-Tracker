@@ -135,7 +135,7 @@ class CryptoFearGreedIndex:
 
     def create_live_gauge_plot(self):
         self.update_gauge_data()
-        self.timer = self.fig.canvas.new_timer(interval=300000) # 5 minutes otherwise coingecko complains
+        self.timer = self.fig.canvas.new_timer(interval=120000) # 2 minutes otherwise coingecko complains
         self.timer.add_callback(self.update_gauge_data)
         self.timer.start()
         return self.canvas_widget
@@ -167,7 +167,7 @@ class CryptoFearGreedIndex:
         self.arrow = None; frames = 51
         self.arrow_anim = animation.FuncAnimation(self.fig, self.animate_arrow, frames=frames, interval=20, blit=True, repeat=False)
         self.fig.canvas.draw(); self.fig.canvas.flush_events()
-        print(f"FGI updated successfully! Next update in 5 minutes seconds...")
+        print(f"FGI updated successfully! Next update in 2 minutess...")
 
     def add_gauge_circles(self, fig, values):
         circle_ax = fig.add_axes([0.28, 0.02, 0.44, 0.3]); circle_ax.set_xlim(0, 14); circle_ax.set_ylim(0, 4); circle_ax.axis('off'); circle_ax.set_aspect('equal')
@@ -277,9 +277,11 @@ def main():
         fng_app.display_summary(initial_values)
 
     def on_closing():
+        global is_tracker_active
+        print(is_tracker_active)
         if hasattr(fng_app, 'timer') and fng_app.timer:
             fng_app.timer.stop()
-            is_tracker_active=True
+
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)

@@ -27,7 +27,7 @@ class ConfigTracker(tk.Tk):
 
         # Window configuration
         self.geometry("600x500")
-        self.title("Config Tracker - Crypto Price Tracker V1.1")
+        self.title("Config Tracker - Crypto Price Tracker V1.5")
 
         # Fix 2: Better error handling for icon loading
         self.load_icon()
@@ -137,7 +137,7 @@ class ConfigTracker(tk.Tk):
 
         # Create checkboxes for miscellaneous options
         self.create_checkbox(misc_frame, "Debug Mode", self.debug_mode)
-        self.create_checkbox(misc_frame, "Dark mode activated", self.day_mod)
+        self.create_checkbox(misc_frame, "Dark Mode", self.day_mod)
         self.create_checkbox(misc_frame, "Demo Mode", self.DemoMode)
         self.create_checkbox(misc_frame, "Cold Storage Available", self.Cold_Aval)
 

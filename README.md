@@ -5,6 +5,8 @@ This tracker keeps track of crypto coins in your possession. It provides an over
 - **Warm storage**: Coins and value on the exchange  
 - **Cold storage**: Coins and value in hardware wallets  
 - **Stocks**: (Currently under development)
+- **Total Assets**: (Cold, Warm, Stocks and specific profit loss if csv has been loaded)
+
 
 It reads CSV files from your exchange and provides summaries and pivot tables in `tracker.xlsx`.
 
@@ -30,14 +32,14 @@ You can run the program in a Python environment or build a Windows executable us
 
 ```
 tracker.py  
-tracker.cfg
-tracker.xlsx
+tracker.cfg  
 config_tracker_module.py  
-calcpiv_module.py
+calcpiv_module.py  
+show_readme_module.py  
 fng_module.py
 crypto_ticker_module.py
-show_readme.py  
 /crypto/
+/screens
 ```
 
 ---
@@ -76,29 +78,34 @@ name3 = CNN Business
 [Miscellaneous]
 debugmode = False
 darkmod = False
-demomod = False
+demomode = False
 cold storage available = True
 ```
 
-### `config_tracker.py`
+### `config_tracker_module.py`
 Handles screen refresh rates and Excel writing.  
 Note:  
 - Setting the main screen refresh below 15s may result in **CoinGecko** rejecting requests.  
-- Only **dark mode** and **cold storage** toggles are currently functional.  
+-  **dark mode** , **debug mode*** and **demo mode** toggles are currently functional.  
 
-### `calcpiv.py`
+### `calcpiv_module.py`
 Processes your exchange CSV file.  
 If enabled in config, it writes:
 - Summary → `CSV_History`  
 - Raw data → `Raw Data`  
 - Pivot tables → `Pivot Table Summary` and `Pivot Table Detail`
 
-### `show_readme.py`
+### 'fng_module.py' icluded 'crypto_ticker_module'
+Show the current Fear and Greed index. Projects the top 10 Gainers and top 10 Losers. Wil show on the bottom line a crypto ticker with the 20 biggest according to marketcap
+
+### `show_readme_module.py`
 Displays this README from within the program.
 
 ### `/crypto/` directory
 Contains screen and crypto icons in `crypto/ico/32/`.  
 Missing icons have been auto-created. You may customize them.
+
+### `/screens/` directory with screen images from the demo mode
 
 ---
 
@@ -127,11 +134,13 @@ Future version will include API integration.
 ### 🌐 Crypto Sentiment
 
 - **Fear and Greed**: current crypto Fear and Greed index  
+                      including top 10 Gainers & Losers
+
 - **AGGR View**: live Bitcoin trading  
-- **User-defined live views**:
+- **User-defined Crypto Sentiments**:
   - Default 1: [Cointelegraph](https://cointelegraph.com)
   - Default 2: [Coindesk](https://www.coindesk.com)
-  - Default 3: [Coinmarket Sentiment )
+  - Default 3: [Coinmarket Sentiment](https://coinmarketcap.com/sentiment/)
 
 ---
 
@@ -151,7 +160,7 @@ Loads and processes CSV from your exchange:
 - **Bottom right**: Toggle:
   - Debug mode
   - Dark mode
-  - Demo Mode (not implemented yet)
+  - Demo Mode
   - Cold storage availability
 
 ---
@@ -170,6 +179,30 @@ Loads and processes CSV from your exchange:
 You're reading it!
 
 ---
+
+### Screens from the Demo Mode
+
+## Main
+
+![Main Screen](screens/main.jpg)
+
+![Main Options](screens/main_options.jpg)
+
+![Main Sentiment](screens/main_sentiment.jpg)
+
+## Options
+
+![Warm Storage](screens/warm_storage.jpg)
+
+![Cold Storage](screens/cold_storage.jpg)
+
+![Total Assets Overview](screens/total_assets.jpg)
+
+## Crypto Sentiment
+![Fear and Greed](screens/fng.jpg)
+
+## Config
+![Setting parameters](screens/config.jpg)
 
 ## 💬 Contact
 
