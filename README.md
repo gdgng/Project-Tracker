@@ -95,7 +95,7 @@ If enabled in config, it writes:
 - Raw data → `Raw Data`  
 - Pivot tables → `Pivot Table Summary` and `Pivot Table Detail`
 
-### 'fng_module.py' icluded 'crypto_ticker_module'
+### 'fng_module.py' included 'crypto_ticker_module'
 Show the current Fear and Greed index. Projects the top 10 Gainers and top 10 Losers. Wil show on the bottom line a crypto ticker with the 20 biggest according to marketcap
 
 ### `show_readme_module.py`
