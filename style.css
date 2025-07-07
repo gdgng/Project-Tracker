@@ -1,0 +1,42 @@
+body {
+  font-family: "Segoe UI", sans-serif;
+  background: #fefefe;
+  padding: 40px;
+  max-width: 900px;
+  margin: auto;
+  line-height: 1.6;
+  color: #333;
+}
+
+h1, h2, h3, h4 {
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 6px;
+  margin-top: 30px;
+}
+
+pre, code {
+  background: #f4f4f4;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 90%;
+  font-family: Consolas, monospace;
+}
+
+pre {
+  overflow-x: auto;
+}
+
+img {
+  max-width: 100%;
+  margin: 20px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+blockquote {
+  border-left: 4px solid #ccc;
+  padding-left: 12px;
+  margin-left: 0;
+  color: #555;
+  background: #f9f9f9;
+}

@@ -107,6 +107,33 @@ total_assets_value_var = None
 total_perc_var = None
 total_crypto_text_var = None
 total_pl_var = None
+# GLOBAL VARIABLES (declared but initially set to None or default values)
+# These are the variables that need to be accessible and modified by multiple functions
+# within your application, particularly the screen-specific ones.
+# They are set to None here so Python knows they're meant to be global,
+# but their actual initialization happens inside show_total_assets.
+is_tracker_active = False
+updater_job_total = None
+status_label_total = None
+btc_label = None
+back_button = None
+
+
+# Other globals needed for calculations that might be updated elsewhere
+total_stocks = 0.0
+T_EUR_I = 0.0
+T_EUR_O = 0.0
+T_INVST = 0.0
+T_PL = 0.0
+pl_percentage = 0.0
+
+# Tkinter StringVars for updating labels - also declared globally
+warm_value_var = None
+cold_value_var = None
+total_assets_value_var = None
+total_perc_var = None
+total_crypto_text_var = None
+total_pl_var = None
 
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
@@ -695,7 +722,7 @@ def show_warm_storage(root):
                 tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price else "N/A",
                          font=("Helvetica", 12), fg=fg_color if eur_price else "red", bg=bg_color,
                          width=price_width, anchor="e").pack(side="left", padx=(20, 0))
-                tk.Label(row_frame, text=f"{total_amount:.4f}",
+                tk.Label(row_frame, text=f"{total_amount:.2f}",
                          font=("Helvetica", 12), fg=fg_color, bg=bg_color,
                          width=amount_width, anchor="e").pack(side="left", padx=(20, 0))
                 tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A",
@@ -987,7 +1014,7 @@ def show_cold_storage(root, main_widgets):
 
                 price_label = tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price is not None else "N/A", font=("Helvetica", 12), fg=fg_color if eur_price is not None else "red", bg=bg_color, width=price_width, anchor="e")
                 price_label.pack(side="left", padx=(20, 0))
-                amount_label = tk.Label(row_frame, text=f"{amount:.4f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=amount_width, anchor="e")
+                amount_label = tk.Label(row_frame, text=f"{amount:.2f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=amount_width, anchor="e")
                 amount_label.pack(side="left", padx=(20, 0))
                 value_label = tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value is not None else "N/A", font=("Helvetica", 12), fg=fg_color if eur_value is not None else "red", bg=bg_color, width=value_width + 1, anchor="e")
                 value_label.pack(side="left", padx=(20, 0))
@@ -1209,49 +1236,37 @@ def set_total_stocks(parent):
 def find_eur_and_get_amounts(file_path):
     """
     Opens an Excel file, finds the row containing 'EUR' in the
-    'Pivot Table Summary' worksheet, and returns the values from the
-    'Amount deposit' and 'Amount withdrawal' columns in that row.
+    'CSV_History' worksheet, and returns the values from the
+    'Invest' and 'Amount withdrawal' columns in that row.
 
     Args:
         file_path (str): The path to the Excel file.
 
     Returns:
-        tuple or None: A tuple containing (deposit_value, withdrawal_value)
-                       if 'EUR' is found, otherwise None.
+        tuple: (success: bool, deposit_value, withdrawal_value)
+
     """
+    global T_EUR_I
+    global T_EUR_O
     try:
         workbook = openpyxl.load_workbook(file_path)
-        sheet = workbook['Pivot Table Summary']
+        sheet = workbook['CSV_History']
+      # Fixed position
 
-        # Find the header row to locate the 'Amount deposit' and 'Amount withdrawal' columns
-        header = [cell.value for cell in sheet[2]]  # Assuming the header is in the first row
-        try:
-            amount_deposit_column_index = header.index('Amount deposit') + 1  # +1 for 1-based indexing
-            amount_withdrawal_column_index = header.index('Amount withdrawal') + 1 # +1 for 1-based indexing
-        except ValueError as e:
-            print(f"Error: Column not found in the header: {e}")
-            return None
+        T_EUR_I = sheet["L2"].value
+        T_EUR_O = sheet["M2"].value
+        print(f"✅ Values Found:\n  In: {T_EUR_I}\n  Out: {T_EUR_O}")
 
-        # Iterate through the rows to find 'EUR'
-        for row_index in range(2, sheet.max_row + 1):  # Start from the second row (assuming header)
-            for cell in sheet[row_index]:
-                if cell.value == 'EUR':
-                    deposit_cell = sheet.cell(row=row_index, column=amount_deposit_column_index)
-                    withdrawal_cell = sheet.cell(row=row_index, column=amount_withdrawal_column_index)
-                    return deposit_cell.value, withdrawal_cell.value
+        return True, T_EUR_I, T_EUR_O
 
-        print("Info: 'EUR' not found in any row.")
-        return None, None
 
     except FileNotFoundError:
-        print(f"Error: File not found at '{file_path}'")
-        return None, None
+        print(f"Error: File not found at '{file_name}'")
     except KeyError:
-        print(f"Error: Worksheet 'Pivot Table Summary' not found in the file.")
-        return None, None
+        print(f"Error: Worksheet 'CSV_History' not found in the file.")
     except Exception as e:
         print(f"An error occurred: {e}")
-        return None, None
+    return False, None, None
 
 
 def on_hover(event):
@@ -1506,33 +1521,7 @@ def write_single_entry(coin, amount, rate, value):
 
 
 
-# GLOBAL VARIABLES (declared but initially set to None or default values)
-# These are the variables that need to be accessible and modified by multiple functions
-# within your application, particularly the screen-specific ones.
-# They are set to None here so Python knows they're meant to be global,
-# but their actual initialization happens inside show_total_assets.
-is_tracker_active = False
-updater_job_total = None
-status_label_total = None
-btc_label = None
-back_button = None
 
-
-# Other globals needed for calculations that might be updated elsewhere
-total_stocks = 0.0
-T_EUR_I = 0.0
-T_EUR_O = 0.0
-T_INVST = 0.0
-T_PL = 0.0
-pl_percentage = 0.0
-
-# Tkinter StringVars for updating labels - also declared globally
-warm_value_var = None
-cold_value_var = None
-total_assets_value_var = None
-total_perc_var = None
-total_crypto_text_var = None
-total_pl_var = None
 @debug_log
 def show_total_assets(root, main_widgets):
     global balances, is_tracker_active
@@ -1559,14 +1548,16 @@ def show_total_assets(root, main_widgets):
         T_INVST = T_EUR_I - T_EUR_O
     else:
         file_path = 'tracker.xlsx'
-        amounts = find_eur_and_get_amounts(file_path)
-
-        if amounts:
-            deposit_value, withdrawal_value = amounts
-            print(f"For EUR, the 'Amount deposit' is: {deposit_value} and 'Amount withdrawal' is: {withdrawal_value}")
-            T_EUR_I = deposit_value
-            T_EUR_O = abs(withdrawal_value)
+        succes = find_eur_and_get_amounts(file_path)
+        if succes:
+            print(f"For EUR, the 'Amount deposit' is: {T_EUR_I} and 'Amount withdrawal' is: {T_EUR_O}")
+            #T_EUR_I = deposit_value
+            #T_EUR_O = abs(withdrawal_value)
             T_INVST = T_EUR_I - T_EUR_O
+        else:
+            print("❌ No values found")
+
+
 
     C_counter = 0
     C_date = None
@@ -1638,6 +1629,8 @@ def show_total_assets(root, main_widgets):
             cold_value_var.set(f"€{total_cold_value:.2f}")
 
         # Calculate T_PL after both warm and cold values are determined
+
+        
         T_PL = (total_cold_value + total_warm_value) - T_INVST
         if T_INVST != 0:
             pl_percentage = (((T_PL / T_INVST) * 100) - 100)
@@ -1955,13 +1948,12 @@ def call_config_tracker():
 def call_fng():
     global is_tracker_active
     is_tracker_active = False
-    print("Start van de call met is_tracker_active", is_tracker_active)
+
 
     config_path = os.path.join(os.path.dirname(__file__), "fng_module.py")
     #subprocess.Popen(["python", config_path])
     subprocess.run(["python", config_path])
     is_tracker_active=True
-    print("Einde van de call met is_tracker_active", is_tracker_active)
 
 def call_show_about():
     config_path = os.path.join(os.path.dirname(__file__), "show_readme_module.py")
@@ -2486,8 +2478,7 @@ def main(root=None):
     initial_width = 600
     initial_height = 300
     title_font = ("Helvetica", 22, "bold")
-    small_font = ("Helvetica"
-    , 10)
+    small_font = ("Helvetica", 10)
     # Set default in Combobox
     default_coin = 'BTC'
 

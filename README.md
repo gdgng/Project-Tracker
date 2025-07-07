@@ -1,5 +1,7 @@
 # Crypto Price Tracker V1.5 (2025)
 
+![Main Screen](screens/main.jpg)
+
 This tracker keeps track of crypto coins in your possession. It provides an overview of:
 
 - **Warm storage**: Coins and value on the exchange  
@@ -42,20 +44,53 @@ crypto_ticker_module.py
 /screens
 ```
 
----
+### pip install:
+Install in the python environment the following
+
+```
+pip install pillow
+pip install requests
+pip install beautifulsoup4
+pip install pywebview
+pip install markdown
+pip install matplotlib
+pip install pywin32
+
+or copy the above in requirements.txt
+and on the command line use
+pip install -r requirements.txt
+
+
+```
+### Open Excel file tracker.xls
+
+```
+Navigate tot Credentials worksheet
+  - Fill in the name of the exchange (Bitvavo)
+  - API Key,
+  - Secret Key
+  - URL (https://api.bitvavo.com/v2/)
+
+Navigate to Cold_Storage worksheet
+  - Fill in the short name of the Coin(s) and the Amount in cold_storage
+Save the excel files
+Start tracker (e.g. python3 tracker.py)
+```
+
+
 
 ## 📂 File Descriptions
 
 ### `tracker.py`
 Main program. Checks for `tracker.xlsx`, creates it if not found.  
-- **Credentials** sheet: add API keys from your exchange.  
-- **Cold_Storage** sheet: enter coin name and amount (value is fetched live).  
+**Credentials** sheet: add API keys from your exchange (read only !).  
+**Cold_Storage** sheet: enter coin name and amount (value is fetched live).  
 
 ### `tracker.cfg`
 Auto-generated config file with default settings:
 
-```ini
-[RefreshRate]
+```
+==RefreshRate==
 main = 30
 warm = 15
 cold = 15
@@ -72,8 +107,8 @@ url1 = https://cointelegraph.com/
 name1 = Cointelegraph
 url2 = https://www.coindesk.com/
 name2 = Coindesk
-url3 = https://edition.cnn.com/business
-name3 = CNN Business
+url3 = https://coinmarketcap.com/sentiment/
+name3 = Coinmarket Sentiment
 
 [Miscellaneous]
 debugmode = False
@@ -82,20 +117,20 @@ demomode = False
 cold storage available = True
 ```
 
-### `config_tracker_module.py`
+### config_tracker_module.py
 Handles screen refresh rates and Excel writing.  
 Note:  
 - Setting the main screen refresh below 15s may result in **CoinGecko** rejecting requests.  
 -  **dark mode** , **debug mode*** and **demo mode** toggles are currently functional.  
 
-### `calcpiv_module.py`
+### calcpiv_module.py`
 Processes your exchange CSV file.  
 If enabled in config, it writes:
 - Summary → `CSV_History`  
 - Raw data → `Raw Data`  
 - Pivot tables → `Pivot Table Summary` and `Pivot Table Detail`
 
-### 'fng_module.py' included 'crypto_ticker_module'
+### 'fng_module.py' icluded 'crypto_ticker_module'
 Show the current Fear and Greed index. Projects the top 10 Gainers and top 10 Losers. Wil show on the bottom line a crypto ticker with the 20 biggest according to marketcap
 
 ### `show_readme_module.py`
@@ -204,10 +239,22 @@ You're reading it!
 ## Config
 ![Setting parameters](screens/config.jpg)
 
+## ✨ Latest Changes (05-07-2025)
+➕If on a windows platform the Load & Calculate will create real pivot   
+    tables. Static pivot tables with other platforms. Total overhaul of
+    this module. Includes: Average buy, Average Sell, Invested
+
+➕README.md will now display icons in color. README will show examples of
+   screens. Instead of doing the parsing of the text in-program it is now converted to html
+
+➖Removed the in-program parser
+
+
+
 ## 💬 Contact
 
 Use this program however you like—adjust, expand, break, or improve it.  
-I'd love to hear about major improvements or ideas!
+I'd love to hear about improvements or ideas!
 
 📧 **gdgng01@gmail.com**
 
