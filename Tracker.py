@@ -644,21 +644,66 @@ def show_warm_storage(root):
 
         # Title
         if par_demo_mode:
-
-            assets_label = tk.Label(root, text="Warm Storage Assets * Demo Mode *", font=("Helvetica", 20, "bold"), fg="orange", bg=bg_color)
+            warm_storage_frame = tk.LabelFrame(
+                root,
+                text="Warm Storage Assets ** Demo Mode **",
+                font=("Helvetica", 18, "bold"),
+                fg="orange",
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+    )
         else:
-            assets_label = tk.Label(root, text="Warm Storage Assets", font=("Helvetica", 20, "bold"), fg="orange", bg=bg_color)
-        assets_label.pack(pady=10)
+            warm_storage_frame = tk.LabelFrame(
+                root,
+                text="Warm Storage Assets",
+                font=("Helvetica", 18, "bold"),
+                fg="orange",
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+    )
+
+        warm_storage_frame.pack(pady=10, fill="x", padx=20)
 
         if balances:
             sorted_balances = sorted(balances.items())
             displayed_coins = []
 
-            symbol_width = 20
-            coin_width = len("Coin")+2
-            price_width = len("Rate (EUR)")
-            amount_width = len("Amount Coins")
-            value_width = len("Value (EUR)")
+            #symbol_width = 10
+            #coin_width = len("Coin")+2
+            #price_width = len("Rate (EUR)")
+            #amount_width = len("Amount Coins")
+            #value_width = len("Value (EUR)")
+
+            # Create a frame to hold the grid-based content
+            grid_container_frame = tk.Frame(warm_storage_frame, bg=bg_color)
+            grid_container_frame.pack(fill="x", padx=10, pady=5)
+
+            # Configure columns for uniform sizing and alignment
+            # Column 0: Icon (left aligned)
+            grid_container_frame.grid_columnconfigure(0, weight=0, uniform="warm_cols") # Don't let it expand too much
+            # Column 1: Coin (left aligned)
+            grid_container_frame.grid_columnconfigure(1, weight=1, uniform="warm_cols")
+            # Column 2: Rate (right aligned)
+            grid_container_frame.grid_columnconfigure(2, weight=1, uniform="warm_cols")
+            # Column 3: Amount (right aligned)
+            grid_container_frame.grid_columnconfigure(3, weight=1, uniform="warm_cols")
+            # Column 4: Value (right aligned)
+            grid_container_frame.grid_columnconfigure(4, weight=1, uniform="warm_cols")
+
+
+            # Header row
+            tk.Label(grid_container_frame, text="Symbol", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=0, sticky="w", padx=(0,0))
+            tk.Label(grid_container_frame, text="Coin", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=1, sticky="w", padx=(2,0))
+            tk.Label(grid_container_frame, text="Rate (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=2, sticky="e", padx=(5,0))
+            tk.Label(grid_container_frame, text="Amount", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=3, sticky="e", padx=(5,0))
+            tk.Label(grid_container_frame, text="Value (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=4, sticky="e", padx=(5,0))
+
+            # Data rows
+            row_num = 1 # Start data rows from row 1 (after header)
 
             # Clear previous data and prepare new data for spreadsheet
             current_warm_data = []
@@ -681,88 +726,55 @@ def show_warm_storage(root):
                         'value': eur_value
                     })
 
-                    symbol_width = 50
-                    coin_width = max(coin_width, len(coin))
-                    price_width = max(price_width, len(f"{eur_price:.2f}" if eur_price else "N/A"))
-                    amount_width = max(amount_width, len(f"{total_amount:.4f}"))
-                    value_width = max(value_width, len(f"{eur_value:.2f}" if eur_value else "N/A"))
-
-            # Headers
-            header_frame = tk.Frame(root, bg=bg_color)
-            header_frame.pack()
-
-            for text, width, anchor in [("    ", symbol_width, "w"),
-                ("Coin", coin_width, "e"),
-                ("Rate (EUR)", price_width, "e"),
-                ("Amount Coins", amount_width, "e"),
-                ("Value (EUR)", value_width, "e")
-            ]:
-                tk.Label(header_frame, text=text, font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor=anchor).pack(side="left", padx=(20 if anchor == "e" else 0, 0))
-
             # Coin rows
             for coin, balance_data, eur_price, eur_value in displayed_coins:
                 total_amount = balance_data['available'] + balance_data['in_order']
                 icon = get_coin_icon(coin)
-                row_frame = tk.Frame(root, bg=bg_color)
-                row_frame.pack()
+                symbol_label = tk.Label(grid_container_frame, text="", font=("Helvetica", 12), fg=fg_color, bg=bg_color)
+                #row_frame = tk.Frame(root, bg=bg_color)
+                #row_frame.pack()
                 # Label with coin-name + icon
-                coin_label = tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="w")
+                #coin_label = tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="w")
 
                 #ICON_COIN_WARM
 
                 if icon:  # Check if the Icon has been loaded
-                    coin_label.config(image=icon, compound="left")
-                    coin_label.config(width=coin_width+10)
-                    coin_label.image = icon  # Make sure the Icon stays and not get lost garbage collection
+                    symbol_label.config(image=icon, compound="left")
+                    symbol_label.image = icon # Keep a reference!
+                symbol_label.grid(row=row_num, column=0, sticky="w", padx=(0,0))
 
-                coin_label.pack(side="left", padx=(0,0))
+                tk.Label(grid_container_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=1, sticky="w", padx=(0,2))
+                tk.Label(grid_container_frame, text=f"{eur_price:.2f}" if eur_price else "N/A", font=("Helvetica", 12), fg=fg_color if eur_price else "red", bg=bg_color).grid(row=row_num, column=2, sticky="e", padx=(5,0))
+                tk.Label(grid_container_frame, text=f"{total_amount:.2f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=3, sticky="e", padx=(5,0))
+                tk.Label(grid_container_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A", font=("Helvetica", 12), fg=fg_color if eur_value else "red", bg=bg_color).grid(row=row_num, column=4, sticky="e", padx=(5,0))
 
-                tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="e").pack(side="left", padx=(20,0))
+                row_num += 1
 
-                tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price else "N/A",
-                         font=("Helvetica", 12), fg=fg_color if eur_price else "red", bg=bg_color,
-                         width=price_width, anchor="e").pack(side="left", padx=(20, 0))
-                tk.Label(row_frame, text=f"{total_amount:.2f}",
-                         font=("Helvetica", 12), fg=fg_color, bg=bg_color,
-                         width=amount_width, anchor="e").pack(side="left", padx=(20, 0))
-                tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A",
-                         font=("Helvetica", 12), fg=fg_color if eur_value else "red", bg=bg_color,
-                         width=value_width + 1, anchor="e").pack(side="left", padx=(20, 0))
+            # Separator line
+            # Place the separator in the grid_container_frame as well, spanning across columns
+            separator = tk.Frame(grid_container_frame, height=1, bg=fg_color)
+            separator.grid(row=row_num, column=0, columnspan=5, sticky="ew", pady=5)
+            row_num += 1
+
+
 
             # Totals
             total_eur_value = sum((item[1]['available'] + item[1]['in_order']) * item[2]
-                                  for item in displayed_coins if item[2] is not None)
+                                 for item in displayed_coins if item[2] is not None)
             sep0_frame = tk.Frame(root, bg=bg_color)
             sep0_frame.pack(pady=5, fill="x") # This frame contains the line
 
-            separator_width = 100
-            separator_thickness = 2 # Changed to 2 for a thinner line
-            # This is the visual white line itself
 
-            separator_widget = tk.Frame(sep0_frame, height=separator_thickness, width=separator_width, bg=fg_color)
-            # The line is packed to the right within sep0_frame, with 110px padding to its right
-            separator_widget.pack(side="right", padx=(0, 110))
-            # --- End of the existing separator code ---
+            tk.Label(
+                grid_container_frame,
+                text=f"Total Warm Storage Value: €{total_eur_value:.2f}",
+                font=("Helvetica", 12, "bold"),
+                fg=fg_tot_storage,
+                bg=bg_color
+                ).grid(row=row_num, column=0, columnspan=5, sticky="e", pady=(5,0))
 
-            # --- This is the code to display the total value directly under the line ---
-            # Create a new frame to hold the total value.
-            # This frame is packed in 'root' AFTER 'sep0_frame', so it appears below it.
-            # It also fills horizontally to allow for similar alignment of its content.
-            total_value_container = tk.Frame(root, bg=bg_color) # Match background if desired
-            total_value_container.pack(fill="x") # Pack it below sep0_frame, filling width
 
-            #  Create a Label widget to display the total EUR value.
-            # It's placed inside 'total_value_container'.
-            total_value_label = tk.Label(
-            total_value_container,
-            text=f"€{total_eur_value:.2f}",
-            font=("Helvetica", 12, "bold"),
-            fg=fg_tot_storage,
-            bg=bg_color  # Match the background of its container
-            )
-            # Pack the label to the right within its container ('total_value_container'),
-            # using the same padx as 'separator_widget' to align it directly under the line.
-            total_value_label.pack(side="right", padx=(0, 110))
+
 
         else:
             tk.Label(root, text="No Assets Found.", font=("Helvetica", 16), fg=fg_color, bg=bg_color).pack()
@@ -940,120 +952,104 @@ def show_cold_storage(root, main_widgets):
 
         # Display Cold Storage header
         if par_demo_mode:
-            cold_storage_label = tk.Label(root, text="Cold Storage Assets *Demo Mode*", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
+            cold_storage_frame = tk.LabelFrame(
+                root,
+                text="Cold Storage Assets ** Demo Mode **",
+                font=("Helvetica", 18, "bold"),
+                fg=fg_cold,
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+                )
+
         else:
-            cold_storage_label = tk.Label(root, text="Cold Storage Assets", font=("Helvetica", 20, "bold"), fg=fg_cold, bg=bg_color)
-        cold_storage_label.pack(pady=10)
+            cold_storage_frame = tk.LabelFrame(
+                root,
+                text="Cold Storage Assets",
+                font=("Helvetica", 18, "bold"),
+                fg=fg_cold,
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+                )
+
+        cold_storage_frame.pack(pady=10, fill="x", padx=20)
+
 
         if cold_storage_balances:
-            # Sort balances alphabetically
             sorted_balances = sorted(cold_storage_balances.items())
 
-            # Create header row
-            header_frame = tk.Frame(root, bg=bg_color)
-            header_frame.pack()
-            symbol_header = tk.Label(header_frame, text="", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="w")
-            symbol_header.pack(side="left", padx=(20,0))
+            # Create a frame to hold the grid-based content
+            grid_container_frame = tk.Frame(cold_storage_frame, bg=bg_color)
+            grid_container_frame.pack(fill="x", padx=10, pady=5)
 
-            coin_header = tk.Label(header_frame, text="Coin", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="w")
-            coin_header.pack(side="left", padx=(45,0))
-            price_header = tk.Label(header_frame, text="Rate (EUR)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="e")
-            price_header.pack(side="left", padx=(20, 0))
-            amount_header = tk.Label(header_frame, text="Amount Coins", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="e")
-            amount_header.pack(side="left", padx=(20, 0))
-            value_header = tk.Label(header_frame, text="Value (EUR)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="e")
-            value_header.pack(side="left", padx=(20, 0))
+            # Configure columns for uniform sizing and alignment
+            # Column 0: Icon (left aligned)
+            grid_container_frame.grid_columnconfigure(0, weight=0, uniform="cold_cols") # Don't let it expand too much
+            # Column 1: Coin (left aligned)
+            grid_container_frame.grid_columnconfigure(1, weight=1, uniform="cold_cols")
+            # Column 2: Rate (right aligned)
+            grid_container_frame.grid_columnconfigure(2, weight=1, uniform="cold_cols")
+            # Column 3: Amount (right aligned)
+            grid_container_frame.grid_columnconfigure(3, weight=1, uniform="cold_cols")
+            # Column 4: Value (right aligned)
+            grid_container_frame.grid_columnconfigure(4, weight=1, uniform="cold_cols")
 
-            # Determine the correct width for each column
-            coin_width = len("Coin")+2
-            price_width = len("Rate (EUR)")
-            amount_width = len("Amount Coins")
-            value_width = len("Value (EUR)")
+            # Header row
+            tk.Label(grid_container_frame, text="", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=0, sticky="w", padx=(0,5))
+            tk.Label(grid_container_frame, text="Coin", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=1, sticky="w", padx=(0,5))
+            tk.Label(grid_container_frame, text="Rate (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=2, sticky="e", padx=(5,0))
+            tk.Label(grid_container_frame, text="Amount", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=3, sticky="e", padx=(5,0))
+            tk.Label(grid_container_frame, text="Value (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=4, sticky="e", padx=(5,0))
 
 
 
 
-            for coin, amount in sorted_balances:
-                eur_price = prices.get(coin, {}).get('eur_rate')
-                eur_value = amount * eur_price if eur_price is not None else None
 
-                # Store data for spreadsheet export
-                current_cold_data.append({
-                    'coin': coin,
-                    'amount': amount,
-                    'rate': eur_price,
-                    'value': eur_value
-                    })
-
-                coin_width = max(coin_width, len(coin))
-                price_width = max(price_width, len(f"{eur_price:.2f}" if eur_price is not None else "N/A"))
-                amount_width = max(amount_width, len(f"{amount:.4f}"))
-                value_width = max(value_width, len(f"{eur_value:.2f}" if eur_value is not None else "N/A"))
-
-            # Display each coin row
+            # Data rows
+            row_num = 1 # Start data rows from row 1 (after header)
             for coin, amount in sorted_balances:
                 eur_price = prices.get(coin, {}).get('eur_rate')
                 eur_value = amount * eur_price if eur_price is not None else None
                 icon = get_coin_icon(coin)
-                row_frame = tk.Frame(root, bg=bg_color)
-                row_frame.pack()
 
-
-
-                #ICON_COIN_COLD
-                symbol_label = tk.Label(row_frame, text="   ", font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="w")
-                if icon:  # Check if the Icon has been loaded
+                symbol_label = tk.Label(grid_container_frame, text="", font=("Helvetica", 12), fg=fg_color, bg=bg_color)
+                if icon:
                     symbol_label.config(image=icon, compound="left")
-                    symbol_label.config(width=coin_width+13)
-                    symbol_label.image = icon  # Make sure the Icon stays and not get lost garbage collection
+                    symbol_label.image = icon # Keep a reference!
+                symbol_label.grid(row=row_num, column=0, sticky="w", padx=(0,5))
 
-                symbol_label.pack(side="left", padx=(0,0))
+                tk.Label(grid_container_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=1, sticky="w", padx=(0,5))
+                tk.Label(grid_container_frame, text=f"{eur_price:.2f}" if eur_price else "N/A", font=("Helvetica", 12), fg=fg_color if eur_price else "red", bg=bg_color).grid(row=row_num, column=2, sticky="e", padx=(5,0))
+                tk.Label(grid_container_frame, text=f"{amount:.2f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=3, sticky="e", padx=(5,0))
+                tk.Label(grid_container_frame, text=f"€{eur_value:.2f}" if eur_value else "N/A", font=("Helvetica", 12), fg=fg_color if eur_value else "red", bg=bg_color).grid(row=row_num, column=4, sticky="e", padx=(5,0))
 
-                coin_label = tk.Label(row_frame, text=coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=coin_width, anchor="w")
-                coin_label.pack(side="left", padx=(45,0))
+                row_num += 1
 
-                price_label = tk.Label(row_frame, text=f"{eur_price:.2f}" if eur_price is not None else "N/A", font=("Helvetica", 12), fg=fg_color if eur_price is not None else "red", bg=bg_color, width=price_width, anchor="e")
-                price_label.pack(side="left", padx=(20, 0))
-                amount_label = tk.Label(row_frame, text=f"{amount:.2f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color, width=amount_width, anchor="e")
-                amount_label.pack(side="left", padx=(20, 0))
-                value_label = tk.Label(row_frame, text=f"€{eur_value:.2f}" if eur_value is not None else "N/A", font=("Helvetica", 12), fg=fg_color if eur_value is not None else "red", bg=bg_color, width=value_width + 1, anchor="e")
-                value_label.pack(side="left", padx=(20, 0))
+            # Separator line
+            # Place the separator in the grid_container_frame as well, spanning across columns
+            separator = tk.Frame(grid_container_frame, height=1, bg=fg_color)
+            separator.grid(row=row_num, column=0, columnspan=5, sticky="ew", pady=5)
+            row_num += 1
 
-            # Calculate and display total value
+            # Total value
             total_cold_value = sum(
                 amount * prices.get(coin, {}).get('eur_rate', 0)
-                for coin, amount in cold_storage_balances.items() if prices.get(coin, {}).get('eur_rate') is not None
-            )
-            sep0_frame = tk.Frame(root, bg=bg_color)
-            sep0_frame.pack(pady=5, fill="x") # This frame contains the line
+                for coin, amount in cold_storage_balances.items()
+                if prices.get(coin, {}).get('eur_rate') is not None
+                )
 
-            separator_width = 100
-            separator_thickness = 2 # Changed to 2 for a thinner line
-            # This is the visual white line itself
-            separator_widget = tk.Frame(sep0_frame, height=separator_thickness, width=separator_width, bg=fg_color)
-            # The line is packed to the right within sep0_frame, with 110px padding to its right
-            separator_widget.pack(side="right", padx=(0, 95))
-            # --- End of the existing separator code ---
-
-            # --- This is the code to display the total value directly under the line ---
-            # Create a new frame to hold the total value.
-            # This frame is packed in 'root' AFTER 'sep0_frame', so it appears below it.
-            # It also fills horizontally to allow for similar alignment of its content.
-            total_value_container = tk.Frame(root, bg=bg_color) # Match background if desired
-            total_value_container.pack(fill="x") # Pack it below sep0_frame, filling width
-
-            #  Create a Label widget to display the total EUR value.
-            # It's placed inside 'total_value_container'.
-            total_value_label = tk.Label(
-            total_value_container,
-            text=f"€{total_cold_value:.2f}",
-            font=("Helvetica", 12, "bold"),
-            fg=fg_tot_storage,
-            bg=bg_color  # Match the background of its container
-            )
-            # Pack the label to the right within its container ('total_value_container'),
-            # using the same padx as 'separator_widget' to align it directly under the line.
-            total_value_label.pack(side="right", padx=(0, 95))
+            # Place the total value label directly in the grid_container_frame
+            # Span it across columns and stick to the east
+            tk.Label(
+                grid_container_frame,
+                text=f"Total Cold Storage Value: €{total_cold_value:.2f}",
+                font=("Helvetica", 12, "bold"),
+                fg=fg_cold,
+                bg=bg_color
+                ).grid(row=row_num, column=0, columnspan=5, sticky="e", pady=(5,0))
 
         else:
             # No cold storage assets found
@@ -1630,7 +1626,7 @@ def show_total_assets(root, main_widgets):
 
         # Calculate T_PL after both warm and cold values are determined
 
-        
+
         T_PL = (total_cold_value + total_warm_value) - T_INVST
         if T_INVST != 0:
             pl_percentage = (((T_PL / T_INVST) * 100) - 100)
@@ -1746,33 +1742,50 @@ def show_total_assets(root, main_widgets):
     root.geometry("700x700")
     root.configure(bg=bg_color)
     if par_demo_mode:
-        title_label = tk.Label(root, text="Total Assets Overview * Demo Mode *", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
+        title_label = tk.Label(root, text="Assets Overview * Demo Mode *", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
     else:
-        title_label = tk.Label(root, text="Total Assets Overview", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
+        title_label = tk.Label(root, text="Assets Overview", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
     title_label.pack(pady=10)
 
-    tot_frame = tk.Frame(root, bg=bg_color)
-    tot_frame.pack(pady=5, fill="x")
+    #tot_frame = tk.Frame(root, bg=bg_color)
+    #tot_frame.pack(pady=5, fill="x")
 
-    tot_label = tk.Label(tot_frame, text="Total Assets", font=("Helvetica", 14, "underline"), fg=fg_tot_assets, bg=bg_color, anchor="w")
-    tot_label.pack(side="left", padx=(20, 0))
+    #tot_label = tk.Label(tot_frame, text="Total Assets", font=("Helvetica", 14, "underline"), fg=fg_tot_assets, bg=bg_color, anchor="w")
+    #tot_label.pack(side="left", padx=(20, 0))
+    # New using a frame
+    # LabelFrame voor Total Assets
+    tot_frame = tk.LabelFrame(
+        root,
+        text="Total Assets",
+        font=("Helvetica", 14, "bold"),
+        fg=fg_tot_assets,
+        bg=bg_color,
+        bd=2,
+        relief="groove",
+        labelanchor="n"
+    )
+    tot_frame.pack(pady=5, fill="x", padx=20)
 
-    warm_frame = tk.Frame(root, bg=bg_color)
-    warm_frame.pack(pady=5, fill="x")
+    # Warm Storage
+    warm_frame = tk.Frame(tot_frame, bg=bg_color)
+
+    warm_frame.pack(pady=3, fill="x")
     warm_label = tk.Label(warm_frame, text="Value Warm Storage:", font=("Helvetica", 14, "bold"), fg="Orange", bg=bg_color, anchor="w")
     warm_label.pack(side="left", padx=(20, 0))
     warm_value = tk.Label(warm_frame, textvariable=warm_value_var, font=("Helvetica", 14,"bold"), fg="Orange", bg=bg_color, anchor="e")
     warm_value.pack(side="right", padx=(0, 20))
 
-    cold_frame = tk.Frame(root, bg=bg_color)
-    cold_frame.pack(pady=5, fill="x")
+    # Cold Storage
+    cold_frame = tk.Frame(tot_frame, bg=bg_color)
+    cold_frame.pack(pady=3, fill="x")
     cold_label = tk.Label(cold_frame, text="Value Cold Storage:", font=("Helvetica", 14), fg=fg_cold, bg=bg_color, anchor="w")
     cold_label.pack(side="left", padx=(20, 0))
     cold_value = tk.Label(cold_frame, textvariable=cold_value_var, font=("Helvetica", 14), fg=fg_cold, bg=bg_color, anchor="e")
     cold_value.pack(side="right", padx=(0, 20))
 
-    stock_frame = tk.Frame(root, bg=bg_color)
-    stock_frame.pack(pady=5, fill="x")
+    # Stocks
+    stock_frame = tk.Frame(tot_frame, bg=bg_color)
+    stock_frame.pack(pady=3, fill="x")
     if C_date is not None:
         stock_label = tk.Label(stock_frame, text=f"Value Stocks (last known):", font=("Helvetica", 14), fg="Yellow", bg=bg_color, anchor="w")
     else:
@@ -1781,20 +1794,34 @@ def show_total_assets(root, main_widgets):
     stock_value_label_widget = tk.Label(stock_frame, text=f"€{total_stock_value:.2f}", font=("Helvetica", 14), fg="yellow", bg=bg_color, anchor="e")
     stock_value_label_widget.pack(side="right", padx=(0, 20))
 
-
-    sep0_frame = tk.Frame(root, bg=bg_color)
+    sep0_frame = tk.Frame(tot_frame, bg=bg_color)
     sep0_frame.pack(pady=5, fill="x")
     separator_width = 140
     separator_thickness = 2 # Changed to 2 for a thinner line
     separator_widget = tk.Frame(sep0_frame, height=separator_thickness, width=separator_width, bg=fg_color)
     separator_widget.pack(side="right", padx=(0, 20))
 
-    total_assets_frame = tk.Frame(root, bg=bg_color)
-    total_assets_frame.pack(pady=5, fill="x")
-    total_assets_label = tk.Label(total_assets_frame, text="Total Assets Value:", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="w")
+    total_assets_value_frame = tk.Frame(tot_frame, bg=bg_color)
+    total_assets_value_frame.pack(pady=5, fill="x")
+    total_assets_label = tk.Label(
+    total_assets_value_frame,
+        text="Total Assets Value:",
+        font=("Helvetica", 14, "bold"),
+        fg=fg_color,
+        bg=bg_color,
+        anchor="w"
+    )
     total_assets_label.pack(side="left", padx=(20, 0))
-    total_assets_value_label = tk.Label(total_assets_frame, textvariable=total_assets_value_var, font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color, anchor="e")
+    total_assets_value_label = tk.Label(
+    total_assets_value_frame,
+    textvariable=total_assets_value_var,
+    font=("Helvetica", 14, "bold"),
+    fg=fg_color,
+    bg=bg_color,
+    anchor="e"
+    )
     total_assets_value_label.pack(side="right", padx=(0, 20))
+
 
     # --- STATUS AND BTC LABELS ---
     # Create these labels BEFORE calling update_assets or animate_status,
@@ -1810,42 +1837,52 @@ def show_total_assets(root, main_widgets):
     sep_crypto_label = tk.Label(sep_crypto_frame, text="", font=("Helvetica", 14, "underline"), fg="lightgray", bg=bg_color, anchor="w")
     sep_crypto_label.pack(side="left", padx=(20, 0))
 
-    total_crypto_frame_title = tk.Frame(root, bg=bg_color) # Renamed to avoid clash
-    total_crypto_frame_title.pack(pady=5, fill="x")
-    total_crypto_label_title = tk.Label(total_crypto_frame_title, text="Crypto Investment", font=("Helvetica", 14, "underline"), fg=fg_tot_assets, bg=bg_color, anchor="w")
-    total_crypto_label_title.pack(side="left", padx=(20, 0))
 
-    total_invest_frame = tk.Frame(root, bg=bg_color)
-    total_invest_frame.pack(pady=5, fill="x")
+    # LabelFrame for Crypto Investment
+    crypto_frame = tk.LabelFrame(
+    root,
+    text="Crypto Investment",
+    font=("Helvetica", 14, "bold"),
+    fg=fg_tot_assets,
+    bg=bg_color,
+    bd=2,
+    relief="groove",
+    labelanchor="n"
+)
+    crypto_frame.pack(pady=10, fill="x", padx=20)
 
+    # EUR Investment In
+    total_invest_frame = tk.Frame(crypto_frame, bg=bg_color)
+    total_invest_frame.pack(pady=3, fill="x")
     total_invest_label = tk.Label(total_invest_frame, text="EUR Investment in", font=("Helvetica", 14, "bold"), fg=fg_day, bg=bg_color, anchor="w")
     total_invest_label.pack(side="left", padx=(20, 0))
     total_invest_value_label = tk.Label(total_invest_frame, text=f"€{T_EUR_I:.2f}", font=("Helvetica", 14, "bold"), fg=fg_day, bg=bg_color, anchor="e")
     total_invest_value_label.pack(side="right", padx=(0, 20))
 
-    total_EUR_out_frame = tk.Frame(root, bg=bg_color)
-    total_EUR_out_frame.pack(pady=5, fill="x")
+    # EUR Investment Out
+    total_EUR_out_frame = tk.Frame(crypto_frame, bg=bg_color)
+    total_EUR_out_frame.pack(pady=3, fill="x")
     total_EUR_out_label = tk.Label(total_EUR_out_frame, text="EUR Investment out", font=("Helvetica", 14, "bold"), fg="lightyellow", bg=bg_color, anchor="w")
     total_EUR_out_label.pack(side="left", padx=(20, 0))
     total_EUR_out_value_label = tk.Label(total_EUR_out_frame, text=f"€{T_EUR_O:.2f}", font=("Helvetica", 14, "bold"), fg="lightyellow", bg=bg_color, anchor="e")
     total_EUR_out_value_label.pack(side="right", padx=(0, 20))
 
-    total_current_frame = tk.Frame(root, bg=bg_color)
-    total_current_frame.pack(pady=5, fill="x")
-
+    # Total Investment
+    total_current_frame = tk.Frame(crypto_frame, bg=bg_color)
+    total_current_frame.pack(pady=3, fill="x")
     total_current_label = tk.Label(total_current_frame, text="Total Investment", font=("Helvetica", 14, "bold"), fg=fg_day, bg=bg_color, anchor="w")
     total_current_label.pack(side="left", padx=(20, 0))
     total_current_value_label = tk.Label(total_current_frame, text=f"€{T_INVST:.2f}", font=("Helvetica", 14, "bold"), fg=fg_day, bg=bg_color, anchor="e")
     total_current_value_label.pack(side="right", padx=(0, 20))
 
-    sep2_frame = tk.Frame(root, bg=bg_color)
-    sep2_frame.pack(pady=5, fill="x")
-    separator_widget_2 = tk.Frame(sep2_frame, height=separator_thickness, width=separator_width, bg=fg_color)
-    separator_widget_2.pack(side="right", padx=(0, 20))
+    separator_inner = tk.Frame(crypto_frame, height=1, width=separator_width, bg=fg_color)
+    separator_inner.pack(pady=5, anchor="e", padx=(0, 20))
 
-    total_crypto_profit_loss_frame = tk.Frame(root, bg=bg_color) # Renamed for clarity
-    total_crypto_profit_loss_frame.pack(pady=5, fill="x")
 
+
+    # Profit/Loss
+    total_crypto_profit_loss_frame = tk.Frame(crypto_frame, bg=bg_color)
+    total_crypto_profit_loss_frame.pack(pady=3, fill="x")
     total_crypto_label_pl = tk.Label(
         total_crypto_profit_loss_frame,
         textvariable=total_crypto_text_var,
@@ -1853,18 +1890,17 @@ def show_total_assets(root, main_widgets):
         fg=fg_tot_crypto,
         bg=bg_color,
         anchor="w"
-    )
+        )
     total_crypto_label_pl.pack(side="left", padx=(20, 0))
     total_crypto_value_label_pl = tk.Label(
-        total_crypto_profit_loss_frame,
-        textvariable=total_pl_var,
-        font=("Helvetica", 14, "bold"),
-        fg=fg_tot_crypto,
-        bg=bg_color,
-        anchor="e"
-    )
+            total_crypto_profit_loss_frame,
+            textvariable=total_pl_var,
+            font=("Helvetica", 14, "bold"),
+            fg=fg_tot_crypto,
+            bg=bg_color,
+            anchor="e"
+            )
     total_crypto_value_label_pl.pack(side="right", padx=(0, 20))
-
     # Back Button
     try:
         icon_path = os.path.join(os.getcwd(), "crypto", f"back_blue.png")

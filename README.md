@@ -215,11 +215,13 @@ You're reading it!
 
 ---
 
-### Screens from the Demo Mode
+### Screens from the Demo Mode (Light mode and dark mode)
 
 ## Main
 
 ![Main Screen](screens/main.jpg)
+
+![Main Screen](screens/main_dark.jpg)
 
 ![Main Options](screens/main_options.jpg)
 
@@ -229,9 +231,15 @@ You're reading it!
 
 ![Warm Storage](screens/warm_storage.jpg)
 
+![Warm Storage](screens/warm_storage_dark.jpg)
+
 ![Cold Storage](screens/cold_storage.jpg)
 
+![Cold Storage](screens/cold_storage_dark.jpg)
+
 ![Total Assets Overview](screens/total_assets.jpg)
+
+![Total Assets Overview](screens/total_assets_dark.jpg)
 
 ## Crypto Sentiment
 ![Fear and Greed](screens/fng.jpg)
@@ -239,13 +247,17 @@ You're reading it!
 ## Config
 ![Setting parameters](screens/config.jpg)
 
-## ✨ Latest Changes (05-07-2025)
+## ✨ Latest Changes (09-07-2025)
+➕Better design of the screens with use of grids, no more alignment
+  issues. Shorter piece of code
+
+(05-07-2025)
 ➕If on a windows platform the Load & Calculate will create real pivot   
-    tables. Static pivot tables with other platforms. Total overhaul of
-    this module. Includes: Average buy, Average Sell, Invested
+  tables. Static pivot tables with other platforms. Total overhaul of
+  this module. Includes: Average buy, Average Sell, Invested
 
 ➕README.md will now display icons in color. README will show examples of
-   screens. Instead of doing the parsing of the text in-program it is now converted to html
+  screens. Instead of doing the parsing of the text in-program it is now converted to html
 
 ➖Removed the in-program parser
 
