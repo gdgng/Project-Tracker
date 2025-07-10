@@ -249,7 +249,11 @@ You're reading it!
 ## Config
 ![Setting parameters](screens/config.jpg)
 
-## ✨ Latest Changes (09-07-2025)
+## ✨ Latest Changes (10-07-2025)
+
+➕New menu under options: Both Storage Assets. Shows Warm and Cold Storage combined
+
+(09-07-2025)
 ➕Better design of the screens with use of grids, no more alignment
   issues. Shorter piece of code
 
