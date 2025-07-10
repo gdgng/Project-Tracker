@@ -237,6 +237,8 @@ You're reading it!
 
 ![Cold Storage](screens/cold_storage_dark.jpg)
 
+![Both Storage](screens/both_storage.jpg)
+
 ![Total Assets Overview](screens/total_assets.jpg)
 
 ![Total Assets Overview](screens/total_assets_dark.jpg)

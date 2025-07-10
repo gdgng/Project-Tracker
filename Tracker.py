@@ -598,6 +598,307 @@ def about():
     # highlight_menu("About", "About") # highlight_menu is not defined
     pass
 
+
+def show_combined_storage(root, main_widgets):
+    global is_tracker_active, updater_job_warm, status_label_warm, btc_label, back_button
+    root.title("Combined Storage - Crypto Price Tracker V1.5")
+    icon_path = os.path.join(os.getcwd(), "crypto", f"ThermoWarm.ico")
+    root.iconbitmap(icon_path)  # Your .ico file path here
+    root.configure(bg=bg_color)
+
+    is_tracker_active = False
+    updater_job_warm = None
+    status_label_warm = None
+    btc_label = None
+    back_button = None
+
+    for menu in menubar.children.values():  # Iterate through all menus
+
+        for i in range(menu.index('end') + 1):  # Loop through each item
+            menu.entryconfig(i, state="disabled")  # Disablecall each item
+
+    def update_combined_storage():
+        global updater_job_warm, status_label_warm, btc_label, back_button, fg_ani, current_warm_data
+
+        warm_balances = get_warm_exchange_balance()
+        cold_balances = get_cold_storage_balance()
+
+        combined = {}
+
+        # Warm balances: available + in_order
+        for coin, values in warm_balances.items():
+            total = values.get('available', 0) + values.get('in_order', 0)
+            combined[coin] = total
+
+        # Cold balances: just add
+        for coin, amount in cold_balances.items():
+            combined[coin] = combined.get(coin, 0) + amount
+
+        # Get prices
+        prices = {}
+        for coin in combined:
+            try:
+                if coin == "EUR":
+                    prices[coin] = {"eur_rate": 1.0}
+                else:
+                    ticker = get_crypto_ticker(coin)
+                    prices[coin] = ticker if ticker and 'eur_rate' in ticker else {"eur_rate": None}
+            except Exception as e:
+                logging.error(f"Error fetching price for {coin}: {e}")
+                prices[coin] = {"eur_rate": None}
+
+    # Build result
+        result = []
+        for coin, amount in combined.items():
+            rate = prices.get(coin, {}).get("eur_rate", None)
+            total_eur = round(amount * rate, 2) if rate is not None else None
+            result.append({
+                'Coin': coin,
+                'Amount': round(amount, 8),
+                'Rate': round(rate, 2),
+                'Value': round(total_eur,2)
+
+        })
+
+
+        # Sorted Alfabetically
+        displayed_coins = sorted(result, key=lambda x: x['Coin'])
+
+
+
+        for widget in root.winfo_children():
+            if widget not in [status_label_warm, btc_label, back_button] and not isinstance(widget, tk.Menu):
+                widget.destroy()
+
+        root.geometry("700x700")
+        root.configure(bg=bg_color)
+
+        # Title
+        if par_demo_mode:
+            both_storage_frame = tk.LabelFrame(
+                root,
+                text="Both Storage Assets ** Demo Mode **",
+                font=("Helvetica", 18, "bold"),
+                fg=fg_color,
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+    )
+        else:
+            both_storage_frame = tk.LabelFrame(
+                root,
+                text="Both Storage Assets",
+                font=("Helvetica", 18, "bold"),
+                fg=fg_color,
+                bg=bg_color,
+                bd=2,
+                relief="groove",
+                labelanchor="n"
+    )
+
+        both_storage_frame.pack(pady=10, fill="x", padx=20)
+        grid_container_frame = tk.Frame(both_storage_frame, bg=bg_color)
+        grid_container_frame.pack(fill="x", padx=10, pady=5)
+
+        # Configure columns for uniform sizing and alignment
+        # Column 0: Icon (left aligned)
+        grid_container_frame.grid_columnconfigure(0, weight=0, uniform="both_cols") # Don't let it expand too much
+        # Column 1: Coin (left aligned)
+        grid_container_frame.grid_columnconfigure(1, weight=1, uniform="both_cols")
+        # Column 2: Rate (right aligned)
+        grid_container_frame.grid_columnconfigure(2, weight=1, uniform="both_cols")
+        # Column 3: Amount (right aligned)
+        grid_container_frame.grid_columnconfigure(3, weight=1, uniform="both_cols")
+        # Column 4: Value (right aligned)
+        grid_container_frame.grid_columnconfigure(4, weight=1, uniform="both_cols")
+
+
+        # Header row
+        tk.Label(grid_container_frame, text="Symbol", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=0, sticky="w", padx=(0,0))
+        tk.Label(grid_container_frame, text="Coin", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=1, sticky="w", padx=(2,0))
+        tk.Label(grid_container_frame, text="Rate (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=2, sticky="e", padx=(5,0))
+        tk.Label(grid_container_frame, text="Amount", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=3, sticky="e", padx=(5,0))
+        tk.Label(grid_container_frame, text="Value (€)", font=("Helvetica", 14, "bold"), fg=fg_color, bg=bg_color).grid(row=0, column=4, sticky="e", padx=(5,0))
+        total_eur_value=0
+        # Data rows
+        row_num = 1 # Start data rows from row 1 (after header)
+        for entry in displayed_coins:
+            both_coin = entry['Coin']
+            both_amount = entry['Amount']
+            both_rate = entry['Rate']
+            both_value = entry['Value']
+
+            if both_value > 1:
+                #total_amount = balance_data['available'] + balance_data['in_order']
+                total_eur_value=total_eur_value+both_value
+                icon = get_coin_icon(both_coin)
+                symbol_label = tk.Label(grid_container_frame, text="", font=("Helvetica", 12), fg=fg_color, bg=bg_color)
+
+
+                if icon:  # Check if the Icon has been loaded
+                    symbol_label.config(image=icon, compound="left")
+                    symbol_label.image = icon # Keep a reference!
+                    symbol_label.grid(row=row_num, column=0, sticky="w", padx=(0,0))
+
+                    tk.Label(grid_container_frame, text=both_coin, font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=1, sticky="w", padx=(0,2))
+
+                    tk.Label(grid_container_frame, text=f"{entry['Rate']:.2f}",  font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=2, sticky="e", padx=(5,0))
+                    tk.Label(grid_container_frame, text=f"{entry['Amount']:.2f}", font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=3, sticky="e", padx=(5,0))
+                    tk.Label(grid_container_frame, text=f"{entry['Value']:.2f}",  font=("Helvetica", 12), fg=fg_color, bg=bg_color).grid(row=row_num, column=4, sticky="e", padx=(5,0))
+
+                row_num += 1
+
+
+        # Separator line
+        # Place the separator in the grid_container_frame as well, spanning across columns
+        separator = tk.Frame(grid_container_frame, height=1, bg=fg_color)
+        separator.grid(row=row_num, column=0, columnspan=5, sticky="ew", pady=5)
+        row_num += 1
+        tk.Label(
+            grid_container_frame,
+            text=f"Total Both Storage Value: €{total_eur_value:.2f}",
+            font=("Helvetica", 12, "bold"),
+            fg=fg_tot_storage,
+            bg=bg_color
+            ).grid(row=row_num, column=0, columnspan=5, sticky="e", pady=(5,0))
+
+
+
+        if btc_label is None or not btc_label.winfo_exists():
+            btc_label = tk.Label(root, text="", font=("Helvetica", 12), fg=fg_color, bg=bg_color, anchor="sw")
+            btc_label.place(x=195, y=660)
+
+        if back_button is None or not back_button.winfo_exists():
+            icon_path = os.path.join(os.getcwd(), "crypto", f"back_blue.png")
+            img = Image.open(icon_path).resize((20, 20))
+            img_tk = ImageTk.PhotoImage(img)
+
+            back_button = Button(
+                root,
+                image=img_tk,
+                command=back_to_main_warm,  # Pass the function reference, not its call
+                bg="grey",
+                activebackground="forestgreen",
+                highlightbackground="white",
+                # Remove bd=0 or set it to a value > 0 to see relief
+                bd=5,  # Set border width to 5 for visibility
+                relief="raised",# Now relief will be visible
+                width = 35
+            )
+            back_button.bind("<Enter>", on_hover)
+            back_button.bind("<Leave>", on_leave)
+            back_button.place(x=630, y=660)
+            back_button.image = img_tk
+
+        animate_status()
+        updater_job_warm = root.after(par_refresh_warm, update_combined_storage)
+
+    def animate_status():
+
+        symbols = ["🔄", "🔃"]
+        frame_interval = 300
+        total_animation_time = 3000
+
+        def animate(frame_idx=0, elapsed=0):
+            if elapsed < total_animation_time:
+                if status_label_warm and status_label_warm.winfo_exists():
+                    status_label_warm.config(text=symbols[frame_idx % len(symbols)], fg=fg_cyan)
+                    if btc_label and btc_label.winfo_exists():
+                        btc_label.config(text="")
+                root.after(frame_interval, animate, frame_idx + 1, elapsed + frame_interval)
+            else:
+                if status_label_warm and status_label_warm.winfo_exists():
+                    status_label_warm.config(text="✅", fg=fg_ani)
+                try:
+                    btc_val = get_coin_exchange_ticker('BTC-EUR')
+                    btc_price = btc_val.get("price", "N/A")
+                    btc_price_str = btc_val.get("price", "N/A") # Get it as a string
+
+                    display_btc_price = "N/A" # Default to "N/A"
+
+                    if isinstance(btc_price_str, str) and btc_price_str != "N/A":
+                        try:
+                            btc_price_float = float(btc_price_str)
+                            formatted_btc_price = f"{btc_price_float:.2f}"
+                        except ValueError:
+                            # Handle cases where the string isn't a valid float
+                            # For example, if it's "Error" or an empty string
+                            formatted_btc_price = "Error" # Or any other appropriate message
+
+                    if btc_label and btc_label.winfo_exists():
+                            eur_usd_rate = scrape_eur_usd()
+
+                            try:
+                                btc_price_usd = float(btc_price) * eur_usd_rate
+                                formatted_price = str(round(btc_price_usd))
+
+                            except ValueError:
+                                print("Error: btc_price is not a valid number!")
+
+                            btc_label.config(text=" Current Bitcoin Price: € " + btc_price + " / $ " + formatted_price, fg=fg_color)
+
+
+
+                except Exception as e:
+                    logging.error(f"BTC price fetch failed: {e}")
+
+        animate()
+
+    def back_to_main_warm():
+        global is_tracker_active, updater_job_warm, current_warm_data
+        #print("Status of write_warm", par_write_warm)
+        # Write current warm storage data to spreadsheet before going back
+        try:
+            if current_warm_data and par_write_warm:
+                write_horizontal(current_warm_data,"warm")
+                print(f"Exported {len(current_warm_data)} coins to spreadsheet")
+            else:
+                print("No warm storage data to export")
+        except Exception as e:
+            print(f"Error writing to spreadsheet: {e}")
+            logging.error(f"Spreadsheet export failed: {e}")
+
+
+        root.title("Main - Crypto Price Tracker V1.5")
+        icon_path = os.path.join(os.getcwd(), "crypto", f"MoB.ico")
+        root.iconbitmap(icon_path)  # Your .ico file path here
+        root.configure(bg=bg_color)
+        global is_tracker_active, updater_job_warm
+        is_tracker_active = True
+        for menu in menubar.children.values():
+            for i in range(menu.index('end') + 1):
+                menu.entryconfig(i, state="normal")
+
+        if updater_job_warm:
+            root.after_cancel(updater_job_warm)
+            updater_job_warm = None
+        for widget in root.winfo_children():
+            if not isinstance(widget, tk.Menu):
+                widget.destroy()
+        show_main_screen(root)
+
+    # Clear current widgets
+    for widget in root.winfo_children():
+        if not isinstance(widget, tk.Menu):
+            widget.pack_forget()
+            widget.place_forget()
+            widget.destroy()
+
+    # Status label
+    status_label_warm = tk.Label(root, text="", font=("Helvetica", 18), fg="orange", bg=bg_color, anchor="sw")
+    status_label_warm.place(x=20, y=660)
+
+
+
+
+
+    update_combined_storage()
+
+
+
+
+
 @debug_log
 def show_warm_storage(root):
     global is_tracker_active, updater_job_warm, status_label_warm, btc_label, back_button
@@ -906,8 +1207,13 @@ def show_warm_storage(root):
 
     update_warm_storage()
 
-
-
+def restart_program():
+    """Restarts the current program.
+    Note: this function does not return. Any cleanup action (like
+    saving data) must be done before calling this function.
+    """
+    python = sys.executable
+    os.execv(python, [python] + sys.argv)
 
 @debug_log
 def show_cold_storage(root, main_widgets):
@@ -1979,7 +2285,19 @@ def call_csv_window():
 
 def call_config_tracker():
     config_path = os.path.join(os.path.dirname(__file__), "config_tracker_module.py")
-    subprocess.Popen(["python", config_path])
+    print(f"Launching config tracker: {config_path}")
+
+    # Launch the subprocess and store the Popen object
+    process = subprocess.Popen(["python", config_path])
+
+    # Wait for the subprocess to complete before continuing
+    print("Waiting for config tracker to finish...")
+    process.wait() # This line makes your current script pause
+
+    # These lines will only execute AFTER config_tracker_module.py has finished
+    print("Config tracker finished. Returning from call_config_tracker.")
+    restart_program()
+
 
 def call_fng():
     global is_tracker_active
@@ -2564,6 +2882,11 @@ def main(root=None):
                 global main_widgets
                 show_cold_storage(root, main_widgets)
 
+            def call_show_combined_storage():
+                global main_widgets
+                #show_cold_combined(root, main_widgets)
+                show_combined_storage(root, main_widgets)
+
             def call_show_total_assets():
                 global main_widgets
                 show_total_assets(root, main_widgets)
@@ -2579,6 +2902,7 @@ def main(root=None):
             menubar.add_cascade(label="Options", menu=options_menu)
             options_menu.add_command(label="Warm Storage", command=call_show_warm_storage)
             options_menu.add_command(label="Cold Storage", command=call_show_cold_storage)
+            options_menu.add_command(label="Both Storage", command=call_show_combined_storage)
             options_menu.add_command(label="Input Stocks", command=lambda: set_total_stocks(root))
             options_menu.add_command(label="Total Assets", command=call_show_total_assets)
 
