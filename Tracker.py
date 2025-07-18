@@ -709,7 +709,7 @@ def show_combined_storage(root, main_widgets):
                 font=("Helvetica", 18, "bold"),
                 fg=fg_color,
                 bg=bg_color,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
     )
@@ -720,7 +720,7 @@ def show_combined_storage(root, main_widgets):
                 font=("Helvetica", 18, "bold"),
                 fg=fg_color,
                 bg=bg_color,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
     )
@@ -774,7 +774,7 @@ def show_combined_storage(root, main_widgets):
             if both_value > 1:
                 #total_amount = balance_data['available'] + balance_data['in_order']
                 total_eur_value=total_eur_value+both_value
-                print(f"Check market: {both_coin}")
+                #print(f"Check market: {both_coin}")
                 both_change=get_coin_change(both_coin)
 
                 if both_change > 0:
@@ -1009,7 +1009,7 @@ def show_warm_storage(root):
                 fg="orange",
                 bg=bg_color,
                 height=600,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
     )
@@ -1021,7 +1021,7 @@ def show_warm_storage(root):
                 fg="orange",
                 bg=bg_color,
                 height=600,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
     )
@@ -1349,7 +1349,7 @@ def show_cold_storage(root, main_widgets):
                 fg=fg_cold,
                 bg=bg_color,
                 height=600,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
                 )
@@ -1362,7 +1362,7 @@ def show_cold_storage(root, main_widgets):
                 fg=fg_cold,
                 bg=bg_color,
                 height=600,
-                bd=2,
+                bd=3,
                 relief="groove",
                 labelanchor="n"
                 )
@@ -2191,7 +2191,7 @@ def show_total_assets(root, main_widgets):
             fg=fg_color,
             bg=bg_color,
             height=600,
-            bd=2,
+            bd=3,
             relief="groove",
             labelanchor="n")
         #title_label = tk.Label(root, text="Assets Overview * Demo Mode *", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
@@ -2203,7 +2203,7 @@ def show_total_assets(root, main_widgets):
             fg=fg_color,
             bg=bg_color,
             height=600,
-            bd=2,
+            bd=3,
             relief="groove",
             labelanchor="n")
         #title_label = tk.Label(root, text="Assets Overview", font=("Helvetica", 20, "bold"), fg=fg_color, bg=bg_color)
