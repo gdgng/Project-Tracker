@@ -246,12 +246,24 @@ You're reading it!
 ## Crypto Sentiment
 ![Fear and Greed](screens/fng.jpg)
 
+## CSV data_only
+Will read a CSV file (e.g. bitvavo's CSV) and calculate  and write to
+tracker.xlsx (if activated in parameters)
+![CSV Data](screens/loadcalc.jpg)
+
+
+
+
 ## Config
 ![Setting parameters](screens/config.jpg)
 
-## ✨ Latest Changes (10-07-2025)
+## ✨ Latest Changes (18-07-2025)
+➕Better layout of the screens: Warm, Cold storage, Total Assets. Changed Both Assets in Crypto Assets. All these screens will show the relative change (24h)
 
+
+(10-07-2025)
 ➕New menu under options: Both Storage Assets. Shows Warm and Cold Storage combined
+➖ Removed obsolete calls
 
 (09-07-2025)
 ➕Better design of the screens with use of grids, no more alignment
@@ -261,10 +273,8 @@ You're reading it!
 ➕If on a windows platform the Load & Calculate will create real pivot   
   tables. Static pivot tables with other platforms. Total overhaul of
   this module. Includes: Average buy, Average Sell, Invested
-
 ➕README.md will now display icons in color. README will show examples of
   screens. Instead of doing the parsing of the text in-program it is now converted to html
-
 ➖Removed the in-program parser
 
 
